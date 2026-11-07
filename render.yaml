@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: canoe
+    runtime: python
+    plan: free
+    buildCommand: echo "no dependencies to install"
+    startCommand: python -m canoe.api
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: CANOE_API_TOKEN
+        sync: false

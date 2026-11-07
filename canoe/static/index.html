@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canoe · Trustworthy claims triage</title>
+<meta name="description" content="Canoe reads a fictional motor claim, recommends the next step and shows the facts and the policy version behind it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#/" aria-label="Canoe home">Canoe</a>
+  <nav aria-label="Main">
+    <a href="#/triage" data-nav="triage">Triage</a>
+    <a href="#/reviewers" data-nav="reviewers">Reviewers</a>
+    <a href="#/policy" data-nav="policy">Policy changes</a>
+    <a href="#/measurement" data-nav="measurement">Measurement</a>
+    <a href="#/business" data-nav="business">Business case</a>
+  </nav>
+  <div class="nav-right">
+    <span class="who" id="who" hidden></span>
+    <a class="btn btn-ink" href="#/triage">Run triage</a>
+  </div>
+</header>
+
+<main id="main" tabindex="-1"></main>
+
+<footer class="foot">
+  <div>
+    <div class="foot-brand">Canoe</div>
+    <div class="foot-motto">Cymba levis, iudicium certum.</div>
+  </div>
+  <div class="foot-right">
+    <p>Fictional hackathon prototype for the thinc! Munich case by Taktile. The system recommends the next handling step. It never approves or pays a claim.</p>
+    <p class="foot-links"><a href="#/policy">Policy <span id="foot-version">v1</span></a><a href="#/business">Change control</a><a href="#" id="to-top">Back to top</a></p>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>
