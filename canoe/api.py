@@ -178,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
                 return s.edit_facts(cid, body.get("changes") or {}, body.get("reason", ""), body.get("reviewer", ""))
             if parts[2] == "info-response":
                 return s.answer_info(cid, body.get("values") or {}, body.get("name", ""))
+            if parts[2] == "settle":
+                return s.settle(cid, body.get("decision", ""), body.get("reason", ""), body.get("reviewer", ""))
             if parts[2] == "outcome":
                 return s.record_outcome(cid, body.get("final_outcome", ""), body.get("source", ""),
                                         body.get("note", ""), body.get("recorded_by", ""))

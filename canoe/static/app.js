@@ -363,7 +363,7 @@ function rvVisible() {
     if (rvFilter === 'all') return true;
     if (c.case_status !== 'open') return false;
     if (rvFilter === 'open') return true;
-    return c.recheck_pending || c.effective_recommendation !== 'routine_processing';
+    return c.recheck_pending || c.effective_recommendation !== 'routine_processing' || c.effective_source !== 'system';
   }).sort((a, b) => Number(b.recheck_pending) - Number(a.recheck_pending) || a.case_id.localeCompare(b.case_id));
 }
 function viewReviewers(id) {
@@ -375,7 +375,7 @@ function viewReviewers(id) {
       $('#chips').innerHTML = [['attention', 'Needs a person'], ['open', 'All open'], ['closed', 'Closed'], ['all', 'Everything']].map(([k, t]) => `<button class="chip" data-f="${k}" aria-pressed="${rvFilter === k}">${t}</button>`).join('');
       const items = rvVisible();
       $('#queue-list').innerHTML = items.length ? items.map((c) => `<button class="q-item" data-id="${esc(c.case_id)}" aria-current="${c.case_id === id}">
-        <div class="t"><span class="mono">${esc(c.case_id)}</span><span class="row" style="gap:6px">${c.recheck_pending ? '<span class="pill pending">recheck</span>' : ''}${pill(c.effective_recommendation)}</span></div><div class="s">${esc(c.summary)}</div></button>`).join('')
+        <div class="t"><span class="mono">${esc(c.case_id)}</span><span class="row" style="gap:6px">${c.recheck_pending ? '<span class="pill pending">recheck</span>' : ''}${c.case_status === 'open' && c.effective_source !== 'system' ? '<span class="pill pending">decided, not closed</span>' : ''}${c.settled_decision ? `<span class="pill closed">${c.settled_decision === 'decline' ? 'declined' : 'approved'}</span>` : ''}${pill(c.effective_recommendation)}</span></div><div class="s">${esc(c.summary)}</div></button>`).join('')
         : '<div class="empty"><h3>Nothing here</h3><p>Try another filter.</p></div>';
       $$('#chips .chip').forEach((b) => b.addEventListener('click', () => { rvFilter = b.dataset.f; drawQueue(); }));
       $$('.q-item').forEach((b) => b.addEventListener('click', () => { location.hash = `#/reviewers/${encodeURIComponent(b.dataset.id)}`; }));
@@ -393,6 +393,7 @@ function timelineItems(c) {
   c.fact_edits.forEach((e) => ev.push({ at: e.created_at, cls: 't-override', html: `<strong>Fact corrected</strong> by ${esc(e.editor)} (${esc(e.role)}): <span class="mono">${esc(e.field)}</span> ${esc(e.old_value)} to ${esc(e.new_value)}. ${esc(e.reason)}` }));
   c.rechecks.forEach((r) => ev.push({ at: r.created_at, html: `<strong>Recheck flagged</strong> ${esc(r.from_version)} to ${esc(r.to_version)}: ${esc(r.from_recommendation)} to ${esc(r.to_recommendation)} <span class="pill ${r.status === 'pending' ? 'pending' : 'closed'}">${esc(r.status)}</span>` }));
   c.info_requests.forEach((r) => ev.push({ at: r.created_at, html: `<strong>Information requested</strong> from claimant: <span class="mono">${esc(r.ask_fields.join(', '))}</span> <span class="faint">(${esc(r.status)})</span>` }));
+  if (c.settlement) ev.push({ at: c.settlement.created_at, cls: 't-override', html: `<strong>Claim closed: ${c.settlement.decision === 'decline' ? 'declined' : 'approved'}</strong> by ${esc(c.settlement.reviewer)} on policy ${esc(c.settlement.policy_version)}${c.settlement.reason ? `. Reason: “${esc(c.settlement.reason)}”` : ''}` });
   c.outcomes.forEach((o) => ev.push({ at: o.recorded_at, html: `<strong>Final outcome arrived</strong> (${esc(o.source)}): ${pill(o.final_outcome)} ${esc(o.note)}` }));
   return ev.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : (b.id || 0) - (a.id || 0)));
 }
@@ -407,7 +408,7 @@ async function reviewDetail(id) {
     <div class="card pad"><div class="row between" style="align-items:flex-start"><div><div class="eyebrow">${esc(c.case_id)} · ${statusPill(c.case_status)}</div><h2 style="font-size:30px;margin-top:6px">${esc(c.summary || 'Motor claim')}</h2></div>${decisionHead(c)}</div>
       ${c.effective_source === 'reviewer' ? `<div class="notice" style="margin-top:14px">System said ${pill(d.recommendation)} under policy ${esc(d.policy_version)}. A reviewer decided ${pill(c.effective_recommendation)}. The system output is kept for the record.</div>` : ''}
       ${pending ? `<div class="notice" style="margin-top:14px"><strong>Recheck needed.</strong> Policy ${esc(pending.to_version)} changed this open claim from ${esc(pending.from_recommendation)} to ${esc(pending.to_recommendation)}.${pending.has_override ? ' A reviewer had already overridden the earlier result.' : ''}</div>` : ''}
-      ${!editable ? '<div class="notice calm" style="margin-top:14px">This claim is closed. Its decision is kept as it was and cannot be changed by a policy update.</div>' : ''}</div>
+      ${!editable ? `<div class="notice calm" style="margin-top:14px">This claim is closed${c.settlement ? `: <strong>${c.settlement.decision === 'decline' ? 'declined' : 'approved for normal processing'}</strong> by ${esc(c.settlement.reviewer)} on policy ${esc(c.settlement.policy_version)}, ${esc(fmtTime(c.settlement.created_at))}${c.settlement.reason ? `. Reason: “${esc(c.settlement.reason)}”` : ''}` : ''}. The decision is final and cannot be changed by a reviewer or a policy update.</div>` : ''}</div>
     <div class="grid2" style="align-items:start">
       <div class="card pad"><div class="row between"><h3 style="font-size:24px">Facts</h3>${editable ? '<button class="btn btn-ghost btn-sm" id="edit-facts">Correct a fact</button>' : ''}</div>
         <p class="caption" style="margin:4px 0 10px">Blank means absent. It is never filled in for the system.</p><div id="facts-box">${factsTable(c)}</div><div id="facts-actions"></div></div>
@@ -418,7 +419,9 @@ async function reviewDetail(id) {
       <label class="f">Reviewer<input type="text" name="reviewer" value="${esc(user.name)}" required></label>
       <label class="f full">Reason <small>required when you change the recommendation</small><textarea name="reason" placeholder="What did you see that the rules could not?"></textarea></label></div>
       <div class="row" style="margin-top:12px"><button class="btn btn-rust" type="submit" id="do-override">Record override</button><button class="btn btn-ink" type="button" id="do-confirm">Confirm recommendation</button>
-      <span class="caption" style="margin:0">Recorded with policy <strong>${esc(d.policy_version)}</strong>, your name and the time.</span></div></form>` : ''}
+      <span class="caption" style="margin:0">Recorded with policy <strong>${esc(d.policy_version)}</strong>, your name and the time.</span></div>
+      <div class="settle-box"><div class="eyebrow" style="margin:16px 0 6px">CLOSE THE CLAIM</div><p class="caption" style="margin:0 0 10px">Final. A closed claim cannot be reopened. Uses the reviewer and reason above.</p>
+      <div class="row"><button class="btn btn-ink" type="button" id="do-approve">Approve and close</button><button class="btn btn-ghost" type="button" id="do-decline">Decline and close</button></div></div></form>` : ''}
     <div class="card pad"><h3 style="font-size:24px;margin-bottom:12px">History</h3><ul class="timeline">${timelineItems(c).map((e) => `<li class="${e.cls || ''}"><span class="when">${esc(fmtTime(e.at))}</span>${e.html}</li>`).join('')}</ul></div>
     <details class="card pad"><summary style="cursor:pointer;font-weight:500">Record the final outcome (arrives later)</summary><form id="outcome-form" class="grid-form" style="margin-top:14px">
       <label class="f">What happened in the end<select name="final_outcome">${OUTCOMES.map((o) => `<option value="${o}">${LABEL[o]}</option>`).join('')}</select></label>
@@ -433,6 +436,15 @@ async function reviewDetail(id) {
   if (editable) {
     $('#override-form').addEventListener('submit', (e) => { e.preventDefault(); submitDecision($('#override-form').elements.rec.value); });
     $('#do-confirm').addEventListener('click', () => submitDecision(c.effective_recommendation));
+    const settle = (decision, btn, label) => {
+      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = `Click again: ${label} for good`; setTimeout(() => { btn.dataset.armed = ''; btn.textContent = label; }, 4000); return; }
+      const f = $('#override-form');
+      api(`/claims/${encodeURIComponent(id)}/settle`, { body: { decision, reason: f.elements.reason.value, reviewer: f.elements.reviewer.value } })
+        .then(() => { toast(decision === 'decline' ? 'Declined and closed.' : 'Approved and closed.'); user.name = f.elements.reviewer.value.trim() || user.name; refresh(); })
+        .catch((e) => { btn.dataset.armed = ''; btn.textContent = label; fail(e); });
+    };
+    $('#do-approve').addEventListener('click', (e) => settle('approve', e.currentTarget, 'Approve and close'));
+    $('#do-decline').addEventListener('click', (e) => settle('decline', e.currentTarget, 'Decline and close'));
     $('#edit-facts').addEventListener('click', () => {
       $('#facts-box').innerHTML = factsTable(c, true);
       $('#facts-actions').innerHTML = `<label class="f" style="margin-top:12px">Why are you correcting these facts?<input type="text" id="fact-reason" placeholder="For example: photo shows a bandage"></label>
@@ -616,6 +628,7 @@ function viewBusiness() {
         <div class="card stat"><div class="big">${impact.closed_claims}</div><div class="lab">closed claims left exactly as decided</div></div></div>
         <div class="card pad"><div class="eyebrow">WHERE THE OPEN CLAIMS MOVED</div><div class="moves">${Object.entries(impact.moves).map(([k, n]) => `<span class="move">${esc(k)}: ${n}</span>`).join('') || '<span class="muted">Nothing moved.</span>'}</div>
           <div class="table-wrap"><table class="data"><thead><tr><th>case</th><th>from</th><th>to</th><th>versions</th><th>status</th></tr></thead><tbody>${impact.rechecks.map((r) => `<tr class="clickable" data-id="${esc(r.case_id)}"><td class="m">${esc(r.case_id)}</td><td>${pill(r.from_recommendation)}</td><td>${pill(r.to_recommendation)}</td><td class="m">${esc(r.from_version)} to ${esc(r.to_version)}</td><td><span class="pill ${r.status === 'pending' ? 'pending' : 'closed'}">${esc(r.status)}</span></td></tr>`).join('')}</tbody></table></div></div>
+        ${(impact.policy_changes || []).length ? `<div class="card pad"><div class="eyebrow">TIME FROM DRAFT TO LIVE</div><div class="grid3" style="margin-top:10px">${impact.policy_changes.map((t) => `<div class="card stat"><div class="big">${t.duration_minutes} min</div><div class="lab">${esc(t.version)}: first impact preview ${esc(fmtTime(t.first_preview_at))}, live ${esc(fmtTime(t.published_at))}. ${t.open_claims_rechecked} open claims flagged for recheck.</div></div>`).join('')}</div><p class="caption">Measured from the stored timestamps. Large insurers report weeks to months for the same kind of change.</p></div>` : ''}
         <div class="notice calm">For new claims: every claim that arrives now is decided under ${esc(impact.latest_version)} and carries that version. To see the effect of a change before it goes live, use the preview on the Policy changes page.</div></div>`;
     } else if (bizTab === 'rates') {
       const vs = Object.values(q.versions).filter((v) => v.labelled_cases);
