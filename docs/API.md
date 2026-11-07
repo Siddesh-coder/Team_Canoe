@@ -19,8 +19,8 @@ Errors: `{ "error": "plain-language message" }` with status 400, 401, 404, 409.
 | Call | Body |
 |---|---|
 | `POST /api/claims/{id}/override` | `{corrected_recommendation, reason, reviewer}`. Same outcome as the system means "confirm" (reason optional). Stores reviewer, reason and the policy version. 409 for closed claims. |
-| `POST /api/claims/{id}/settle	{decision: "approve"|"decline", reason, reviewer}. Closes the claim for good with the reviewer's final decision. Reason required for decline, and for approve when the recommendation is not routine. 409 afterwards for any change. The engine itself never declines.
-POST /api/claims/{id}/facts` | `{changes: {field: value}, reason, reviewer}`. Logs each change, re-runs the policy. |
+| `POST /api/claims/{id}/settle` | `{decision: "approve"\|"decline", reason, reviewer}`. Closes the claim for good with the reviewer's final decision. Reason required for decline, and for approve when the recommendation is not routine. 409 afterwards for any change. The engine itself never declines. |
+| `POST /api/claims/{id}/facts` | `{changes: {field: value}, reason, reviewer}`. Logs each change, re-runs the policy. |
 | `POST /api/claims/{id}/outcome` | `{final_outcome, source, note, recorded_by}`. Late ground truth, kept apart from recommendations. |
 
 ## Policy owner
@@ -30,7 +30,7 @@ POST /api/claims/{id}/facts` | `{changes: {field: value}, reason, reviewer}`. Lo
 | `GET /api/policy` | Versions with rules, plus the field list. |
 | `POST /api/policy/parse?mode=replace\|add` | Body: the raw bytes of a `.txt`, `.md` or `.docx` policy written in plain sentences (see `docs/policy_template.txt`). Returns `{draft, lines[], warnings[], notes[], has_errors}`. `draft` is null if any line could not be read (nothing is guessed). `mode=replace` treats the file as the whole policy; `mode=add` inserts its rules into the current ones, review rules ahead of missing-document rules. Writes nothing; pass `draft` to preview/publish. |
 | `POST /api/policy/preview` | `{draft: {title, rules, default}}`. Dry run: counts, moves, per-claim rows. Writes nothing. |
-| `POST /api/policy/publish` | `{draft, published_by, approved_by, note}`. Writes the next version, re-decides open claims, flags rechecks, leaves closed claims alone. |
+| `POST /api/policy/publish` | `{draft, published_by, approved_by, note}`. Writes the next version, re-decides open claims, flags rechecks, leaves closed claims alone. The response includes `version`, `applied` and `change_timing` (how long the change took from first preview to release). |
 
 A rule: `{id, outcome: "human_review"|"request_information", reason, when: [{field, op, value}], blank_counts_as_match?}`. Operators: `is_true, is_false, eq, neq, gt, gte, lt, lte, in, not_in`. Conditions in `when` must all hold. Order matters; the first match decides.
 
@@ -39,7 +39,7 @@ A rule: `{id, outcome: "human_review"|"request_information", reason, when: [{fie
 | Call | Returns |
 |---|---|
 | `GET /api/quality` | Per-version metrics (correct, incorrect routine, unnecessary review), changed cases, failures, blank-field handling, monitoring counts. |
-| `GET /api/impact` | What the newest policy did: rechecks, moves, closed claims untouched. |
+| `GET /api/impact` | What the newest policy did to existing claims. Fields: `latest_version`, `versions[]`, `open_claims`, `closed_claims`, `closed_changed` (always 0: closed claims are never re-decided), `recheck_total`, `recheck_pending`, `moves` (e.g. `{"routine_processing -> human_review": 5}`), `rechecks[]` (each: `case_id`, `from_version`, `to_version`, `from_recommendation`, `to_recommendation`, `has_override`, `status` = `pending` or `resolved`), `policy_changes[]`, `settled`. This is where the v1 to v2 comparison comes from. With only one policy version, `rechecks` is empty. You can also build the comparison from `GET /api/claims`: for each claim, compare `recommendation_v1` with `recommendation_latest` (only open claims can differ; closed claims always match). If the comparison looks empty, check that the server is running the latest deploy by opening `/api/impact` in a browser and looking at `recheck_total`. |
 | `GET /api/audit` | One feed of overrides, fact edits and policy publications. |
 | `GET /api/outbox` | Drafted emails to claimants. |
 | `POST /api/batch?save=1&format=csv` | Body: claims CSV as raw text (`Content-Type: text/csv`). Returns `{columns, results[], csv}`; with `format=csv` returns the file. `save=1` also adds claims to the register. |
