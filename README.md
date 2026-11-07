@@ -4,6 +4,20 @@ Thinc! Munich hackathon, Taktile case. Canoe reads a fictional motor claim, reco
 
 **Python standard library only.** Nothing to install. Python 3.10 or newer.
 
+## Live backend
+
+The backend is deployed on Render (free tier):
+
+**https://canoe-rc49.onrender.com**
+
+* This is the **API base URL**. All endpoints start with `/api`, for example `https://canoe-rc49.onrender.com/api/claims`. Use it without a trailing slash.
+* Health check: `https://canoe-rc49.onrender.com/api/health` should return `{"status": "ok", ...}`.
+* The same address also serves the built-in Canoe test website at `/`.
+* No access token is set, so no authentication header is needed.
+* The free tier falls asleep when idle. The first request can take 30 to 60 seconds, so open `/api/health` a few minutes before a demo.
+* Data saved on the live server (claims, overrides, policies published through the site) is lost when it restarts. Policy files in `policies/` are safe because they are in this repo.
+* Building the website elsewhere (for example Lovable)? Read `docs/FRONTEND_BRIEF.md` and `docs/API.md`.
+
 ## The one design decision that matters
 
 The written policy decides, in code, with no language model in the decision path. The policy is a versioned JSON file (`policies/v1.json`) that the engine executes in order. Reasons:

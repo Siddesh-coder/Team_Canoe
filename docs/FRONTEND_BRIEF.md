@@ -9,6 +9,10 @@ Context: we're a 4-person team at the thinc! Munich hackathon (Taktile claims tr
 * The Lovable site is **only a frontend**. It has no decision logic and no database of its own. It displays what the API returns and sends user actions to it. Do not add Supabase or a second copy of the rules.
 * The design is the frontend builder's call. Don't copy the test site in `canoe/static`; that is only a rough demo UI.
 
+## API base URL
+
+`https://canoe-rc49.onrender.com` (no trailing slash; all endpoints start with `/api`). Check it at `/api/health`. No token is needed. It is a free Render instance, so it sleeps when idle and the first call can take 30 to 60 seconds. Keep this URL in one config constant so it is easy to change.
+
 ## Read first
 
 1. `docs/API.md`: every endpoint, request fields and response shape.
