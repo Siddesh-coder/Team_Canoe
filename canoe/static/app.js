@@ -485,7 +485,8 @@ function drawPolicy() {
   const next = `v${parseInt(latest.version.slice(1), 10) + 1}`;
   const fieldOpts = (sel) => Object.entries(policyInfo.fields).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(k)}</option>`).join('');
   $('#main').innerHTML = `<div class="wrap page"><div class="page-head"><div><div class="eyebrow">POLICY CHANGES</div><h1>Policy ${esc(latest.version)} is live.</h1>
-    <p>Rules run top to bottom and the first match decides. Edit a copy below, preview the effect, then publish it as ${next}.</p></div>
+    <p>Rules run top to bottom and the first match decides. This page drafts the <strong>next</strong> version: edit a copy below, preview its effect against the live ${esc(latest.version)}, then publish it as ${next}.</p>
+    ${policyInfo.versions.length > 1 ? `<p class="caption" style="margin-top:8px">To see what ${esc(latest.version)} changed compared with v1, open <a href="#/business">Business case</a> and its Policy impact tab.</p>` : ''}</div>
     <div class="ver-strip">${policyInfo.versions.map((p) => `<span class="version-tag"${p.version === latest.version ? ' style="background:var(--ink);color:var(--paper)"' : ''}>${esc(p.version)}${p.meta && p.meta.approved_by ? ` · approved by ${esc(p.meta.approved_by)}` : ''}</span>`).join('')}</div></div>
     <div class="grid2 wide" style="align-items:start"><div class="stack">
       <div class="card pad stack"><div><h2 style="font-size:28px">Upload a policy document</h2>

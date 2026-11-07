@@ -257,7 +257,11 @@ class Store:
             n += 1
         return f"CLM-{n:04d}"
 
-    def _store_claim(self, row: dict, source: str, name: str = "", email: str = "", trigger: str = "intake") -> str:
+    def _store_claim(self, row: dict, source: str, name: str = "", email: str = "", trigger: str = "intake",
+                     flag_recheck: bool = False) -> str:
+        """flag_recheck: set for claims that already existed before the newest policy (loaded files),
+        so an open claim whose answer differs between v1 and the newest version is flagged for recheck.
+        A brand-new claim from the form is not flagged: nobody acted on a v1 answer for it."""
         claim = normalize_claim(row)
         case_id = claim["case_id"] or self._next_case_id()
         if self._q("SELECT 1 FROM claims WHERE case_id=?", (case_id,)):
@@ -276,11 +280,17 @@ class Store:
             d = decide(claim, pols[0])  # closed claims keep the original v1 decision
             self._insert_decision(case_id, d, "retained")
         else:
-            d = decide(claim, pols[0])  # always keep the v1 view, so v1 and newest can be compared
+            d1 = d = decide(claim, pols[0])  # always keep the v1 view, so v1 and newest can be compared
             self._insert_decision(case_id, d, trigger)
             if pols[-1] is not pols[0]:
                 d = decide(claim, pols[-1])
                 self._insert_decision(case_id, d, trigger)
+                if flag_recheck and d["recommendation"] != d1["recommendation"]:
+                    self.db.execute(
+                        "INSERT INTO rechecks(case_id,from_version,to_version,from_recommendation,to_recommendation,"
+                        "has_override,status,created_at) VALUES(?,?,?,?,?,0,'pending',?)",
+                        (case_id, d1["policy_version"], d["policy_version"], d1["recommendation"],
+                         d["recommendation"], now()))
             self._after_decision(case_id, d, claim)
         return case_id
 
@@ -302,7 +312,7 @@ class Store:
                 if cid and self._q("SELECT 1 FROM claims WHERE case_id=?", (cid,)):
                     skipped.append(cid)
                 else:
-                    cid = self._store_claim(raw, source)
+                    cid = self._store_claim(raw, source, flag_recheck=True)
                     added.append(cid)
                 if labelled and cid:
                     for key, val in raw.items():

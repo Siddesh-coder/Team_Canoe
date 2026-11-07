@@ -319,6 +319,26 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(StoreError):  # publishing needs author and approver
             self.s.publish_policy({**make_v2(), "version": "v3", "title": "x"}, "", "O", "n")
 
+    def test_claims_loaded_when_v2_already_exists_are_flagged(self):
+        """Starting the site with v2.json already present must still show what v2 changed for open claims."""
+        shutil.copy(ROOT / "policies" / "v2.json", self.tmp / "pol" / "v2.json")
+        s = Store(self.tmp / "both.db", self.tmp / "pol")
+        s.sync_policies()
+        s.seed(ROOT / "data")
+        imp = s.impact()
+        self.assertEqual(imp["versions"], ["v1", "v2"])
+        self.assertEqual({r["case_id"] for r in imp["rechecks"]},
+                         {"DEV-010", "DEV-011", "PRA-003", "PRA-004", "PRA-005", "PRA-006"})
+        self.assertEqual(imp["closed_changed"], 0)
+        self.assertEqual(s.get_claim("PRA-009")["rechecks"], [])  # closed claims are never flagged
+        c = s.submit_claim({"claim_summary": "new", "policy_active_on_incident": "True", "claim_type": "motor_own_damage",
+                            "repair_type": "ev_high_voltage_battery", "quote_eur": "500", "incident_report_present": "True",
+                            "itemized_quote_present": "True", "injury_reported": "False", "liability_disputed": "False",
+                            "duplicate_flag": "False", "evidence_conflict": "False"})
+        self.assertEqual(c["rechecks"], [])  # a brand-new claim was never acted on under v1
+        self.assertEqual(c["latest_decision"]["recommendation"], "human_review")
+        s.db.close()
+
     def test_info_request_loop(self):
         c = self.s.submit_claim({
             "claimant_name": "Ana", "claimant_email": "ana@example.com", "claim_summary": "Scratch",
