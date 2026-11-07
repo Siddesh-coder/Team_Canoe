@@ -9,7 +9,7 @@ Errors: `{ "error": "plain-language message" }` with status 400, 401, 404, 409.
 | Call | Purpose |
 |---|---|
 | `GET /api/health` | `{status, policy_version}` |
-| `POST /api/claims` | Submit a claim. Body: the ten fact fields as strings (`"True"`, `"False"`, `""` for not known, `quote_eur` as text), plus `claim_summary`, `claimant_name`, `claimant_email`. Returns the full claim. |
+| `POST /api/claims` | Submit a claim. Body: the ten fact fields as strings (`"True"`, `"False"`, `""` for not known, `quote_eur` as text), plus `claim_summary`, `claimant_name`, `claimant_email`. Returns the full claim. Optional for claimant forms: policy_number, incident_date (YYYY-MM-DD), stated_quote_eur (what the claimant typed), document_quote_eur (amount read from the uploaded quote). The three facts a claimant cannot know (policy_active_on_incident, duplicate_flag, evidence_conflict) are then filled by a demo insurer-systems step, marked with source insurer_system_demo and explained in insurer_checks[]. A check that cannot run leaves the fact blank. CSV and batch input are never enriched. Demo policies: POL-1001 (2025-01-01..2026-12-31), POL-1002 (2026), POL-1003 (2024-07..2027-06), POL-2001 (ended 2026-06-30). |
 | `GET /api/claims?status=open` | History list: `claims[]` with `recommendation_v1`, `recommendation_latest`, `effective_recommendation`, `effective_source` (`system`, `reviewer`, `reviewer_confirmed`), `rule`, `policy_version`, `recheck_pending`. |
 | `GET /api/claims/{id}` | One claim: `fields[]` (value, status `known/blank/unreadable`, source), `latest_decision` (`recommendation`, `rule_id`, `policy_version`, `explanation`, `detail.trace`), `decisions[]`, `overrides[]`, `fact_edits[]`, `rechecks[]`, `info_requests[]`, `outcomes[]`, `editable`. |
 | `POST /api/claims/{id}/info-response` | Claimant answers a request: `{values: {field: "True"}, name}`. Only requested fields are accepted. |
@@ -19,7 +19,8 @@ Errors: `{ "error": "plain-language message" }` with status 400, 401, 404, 409.
 | Call | Body |
 |---|---|
 | `POST /api/claims/{id}/override` | `{corrected_recommendation, reason, reviewer}`. Same outcome as the system means "confirm" (reason optional). Stores reviewer, reason and the policy version. 409 for closed claims. |
-| `POST /api/claims/{id}/facts` | `{changes: {field: value}, reason, reviewer}`. Logs each change, re-runs the policy. |
+| `POST /api/claims/{id}/settle	{decision: "approve"|"decline", reason, reviewer}. Closes the claim for good with the reviewer's final decision. Reason required for decline, and for approve when the recommendation is not routine. 409 afterwards for any change. The engine itself never declines.
+POST /api/claims/{id}/facts` | `{changes: {field: value}, reason, reviewer}`. Logs each change, re-runs the policy. |
 | `POST /api/claims/{id}/outcome` | `{final_outcome, source, note, recorded_by}`. Late ground truth, kept apart from recommendations. |
 
 ## Policy owner

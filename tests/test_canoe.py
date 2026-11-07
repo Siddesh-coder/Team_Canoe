@@ -340,6 +340,97 @@ class StoreTests(unittest.TestCase):
         self.assertEqual((e["field"], e["editor"], e["reason"], e["policy_version"]),
                          ("injury_reported", "Rita", "Photo shows a bandage", "v1"))
 
+    def test_settle_closes_for_good_with_reviewer_reason_and_version(self):
+        c = self.s.settle("DEV-006", "decline", "Injury claim handled by bodily-injury team", "Rita Reviewer")
+        self.assertEqual(c["case_status"], "closed")
+        self.assertFalse(c["editable"])
+        st = c["settlement"]
+        self.assertEqual((st["decision"], st["reviewer"], st["policy_version"], st["system_recommendation"]),
+                         ("decline", "Rita Reviewer", "v1", "human_review"))
+        for call in (lambda: self.s.override("DEV-006", "routine_processing", "x", "R"),
+                     lambda: self.s.edit_facts("DEV-006", {"injury_reported": "False"}, "x", "R"),
+                     lambda: self.s.settle("DEV-006", "approve", "x", "R")):
+            with self.assertRaises(StoreError) as e:
+                call()
+            self.assertEqual(e.exception.status, 409)
+        self.assertTrue(any(ev["type"] == "settled" and ev["case_id"] == "DEV-006" for ev in self.s.audit_log()))
+
+    def test_settle_rules(self):
+        with self.assertRaises(StoreError):
+            self.s.settle("DEV-006", "decline", "", "Rita")          # decline needs a reason
+        with self.assertRaises(StoreError):
+            self.s.settle("DEV-006", "approve", "", "Rita")          # approving a review case needs a reason
+        with self.assertRaises(StoreError):
+            self.s.settle("DEV-001", "approve", "", "")              # reviewer required
+        with self.assertRaises(StoreError):
+            self.s.settle("DEV-001", "pay_out", "x", "Rita")         # no other decisions
+        c = self.s.settle("DEV-001", "approve", "", "Rita")          # routine case: reason optional
+        self.assertEqual(c["case_status"], "closed")
+
+    def test_settled_claim_is_untouched_by_a_new_policy(self):
+        self.s.settle("PRA-003", "approve", "", "Rita")              # 1,201 would move under the demo v2
+        res = self.s.publish_policy(make_v2(), "Pia Policy", "Omar Approver", "demo")
+        c = self.s.get_claim("PRA-003")
+        self.assertEqual(c["latest_decision"]["policy_version"], "v1")
+        self.assertNotIn("PRA-003", [r["case_id"] for r in self.s.impact()["rechecks"]])
+        self.assertIn("closed_untouched", res["applied"])
+
+    def test_policy_change_time_is_measured(self):
+        self.s.preview_policy(make_v2())
+        self.s.preview_policy(make_v2())
+        res = self.s.publish_policy(make_v2(), "Pia Policy", "Omar Approver", "demo")
+        t = res["change_timing"]
+        self.assertEqual(t["version"], "v2")
+        self.assertEqual(t["previews"], 2)
+        self.assertGreaterEqual(t["duration_seconds"], 0)
+        self.assertEqual(self.s.impact()["policy_changes"][0]["version"], "v2")
+
+    FORM = dict(claim_type="motor_own_damage", repair_type="standard", quote_eur="650",
+                incident_report_present="True", itemized_quote_present="True", injury_reported="False",
+                liability_disputed="False", claim_summary="Parking scrape")
+
+    def test_form_claim_gets_insurer_facts_and_can_be_routine(self):
+        c = self.s.submit_claim({**self.FORM, "policy_number": "pol-1001", "incident_date": "2026-11-02"})
+        self.assertEqual(c["latest_decision"]["recommendation"], "routine_processing")
+        src = {f["field"]: f["source"] for f in c["fields"]}
+        for f in ("policy_active_on_incident", "duplicate_flag", "evidence_conflict"):
+            self.assertEqual(src[f], "insurer_system_demo")
+        self.assertEqual(len(c["insurer_checks"]), 3)
+
+    def test_insurer_checks_never_guess(self):
+        c = self.s.submit_claim({**self.FORM, "policy_number": "POL-9999", "incident_date": "2026-11-02"})
+        f = {x["field"]: x for x in c["fields"]}
+        self.assertEqual(f["policy_active_on_incident"]["status"], "blank")    # unknown policy stays absent
+        self.assertEqual(c["latest_decision"]["recommendation"], "request_information")
+        c = self.s.submit_claim(dict(self.FORM))                                 # no policy number at all
+        self.assertEqual(c["latest_decision"]["recommendation"], "request_information")
+
+    def test_insurer_checks_find_inactive_policy_duplicate_and_conflict(self):
+        c = self.s.submit_claim({**self.FORM, "policy_number": "POL-2001", "incident_date": "2026-09-01"})
+        self.assertEqual(c["latest_decision"]["recommendation"], "human_review")  # policy ended in June
+        self.s.submit_claim({**self.FORM, "policy_number": "POL-1002", "incident_date": "2026-10-10"})
+        c = self.s.submit_claim({**self.FORM, "policy_number": "POL-1002", "incident_date": "2026-10-10"})
+        self.assertTrue(next(x for x in c["fields"] if x["field"] == "duplicate_flag")["value"])
+        c = self.s.submit_claim({**self.FORM, "policy_number": "POL-1003", "incident_date": "2026-10-11",
+                                 "stated_quote_eur": "900", "document_quote_eur": "1900"})
+        self.assertTrue(next(x for x in c["fields"] if x["field"] == "evidence_conflict")["value"])
+        self.assertEqual(c["latest_decision"]["recommendation"], "human_review")
+
+    def test_batch_and_csv_input_are_not_enriched(self):
+        res = self.s.import_claims_csv("case_id,case_status,claim_summary,policy_active_on_incident,claim_type,repair_type,quote_eur,"
+                                       "incident_report_present,itemized_quote_present,injury_reported,liability_disputed,"
+                                       "duplicate_flag,evidence_conflict\nCSV-1,open,x,,motor_own_damage,standard,650,True,True,False,False,,\n")
+        c = self.s.get_claim("CSV-1")
+        self.assertEqual(c["latest_decision"]["recommendation"], "request_information")
+        self.assertEqual(c["insurer_checks"], [])
+
+    def test_preview_reports_draft_quality_before_release(self):
+        pv = self.s.preview_policy(make_v2())
+        q = pv["draft_quality"]
+        self.assertIn("v2", q["versions"])
+        self.assertEqual(q["versions"]["v1"]["correct"], q["versions"]["v1"]["n"])
+        self.assertEqual(self.s.policies()[-1]["version"], "v1")   # nothing published
+
     def test_final_outcome_is_kept_separate_from_recommendation(self):
         self.s.record_outcome("DEV-001", "human_review", "downstream", "Fraud flagged later", "Claims ops")
         m = self.s.monitoring()

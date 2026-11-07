@@ -57,7 +57,42 @@ CREATE TABLE IF NOT EXISTS outbox(
 CREATE TABLE IF NOT EXISTS outcomes(
   id INTEGER PRIMARY KEY AUTOINCREMENT, case_id TEXT, final_outcome TEXT, source TEXT, note TEXT,
   recorded_by TEXT, recorded_at TEXT);
+CREATE TABLE IF NOT EXISTS claim_meta(
+  case_id TEXT PRIMARY KEY, policy_number TEXT, incident_date TEXT, stated_quote_eur TEXT,
+  document_quote_eur TEXT, insurer_checks TEXT);
+CREATE TABLE IF NOT EXISTS settlements(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, case_id TEXT NOT NULL, decision TEXT NOT NULL, reason TEXT,
+  reviewer TEXT NOT NULL, policy_version TEXT, system_recommendation TEXT, effective_recommendation TEXT,
+  created_at TEXT);
+CREATE TABLE IF NOT EXISTS policy_drafts(
+  version TEXT PRIMARY KEY, first_preview_at TEXT, last_preview_at TEXT, previews INTEGER,
+  published_at TEXT, duration_seconds INTEGER, open_changed INTEGER);
 """
+
+# Demo stand-in for the insurer's own systems (policy admin, claims register, document check).
+# Only used for claims a claimant submits through the form; CSV and batch input are never touched.
+DEMO_POLICY_REGISTER = {
+    "POL-1001": ("2025-01-01", "2026-12-31"),
+    "POL-1002": ("2026-01-01", "2026-12-31"),
+    "POL-1003": ("2024-07-01", "2027-06-30"),
+    "POL-2001": ("2025-01-01", "2026-06-30"),   # ended before most demo incidents
+}
+INSURER_FIELDS = ("policy_active_on_incident", "duplicate_flag", "evidence_conflict")
+INSURER_SOURCE = "insurer_system_demo"
+
+
+def _amount(v) -> float | None:
+    try:
+        return float(str(v).replace("€", "").replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+# A reviewer's final word on a claim. Settling closes the claim for good; the engine never declines.
+SETTLE_DECISIONS = {
+    "approve": "Approved for normal downstream processing (not a payment approval)",
+    "decline": "Declined by a reviewer",
+}
 
 ASK_TEXT = {
     "incident_report_present": "Please send the incident report.",
@@ -179,8 +214,9 @@ class Store:
             self._after_decision(claim["case_id"], d, claim)
         return {"open_changed": moved, "open_unchanged": unchanged, "closed_untouched": closed}
 
-    def preview_policy(self, draft: dict) -> dict:
-        """Dry run: what would change if this draft were published? Nothing is written."""
+    def preview_policy(self, draft: dict, record: bool = True) -> dict:
+        """Dry run: what would change if this draft were published? No decision is written; only the
+        time of the first and latest preview is noted, so the time from draft to release can be measured."""
         with self.lock:
             existing = self.policies()
             draft = dict(draft)
@@ -206,6 +242,13 @@ class Store:
                              "rule_from": cur_rule, "rule_to": d["full_rule_id"],
                              "changed": cur_rec != d["recommendation"], "retained": False,
                              "has_override": has_ov, "summary": claim["claim_summary"]})
+            if record:
+                ts = now()
+                self.db.execute(
+                    "INSERT INTO policy_drafts(version,first_preview_at,last_preview_at,previews) VALUES(?,?,?,1) "
+                    "ON CONFLICT(version) DO UPDATE SET last_preview_at=excluded.last_preview_at, previews=previews+1",
+                    (draft["version"], ts, ts))
+                self.db.commit()
             moves: dict[str, int] = {}
             for r in rows:
                 if r["changed"]:
@@ -218,6 +261,8 @@ class Store:
                 "changed": sum(r["changed"] for r in rows), "moves": moves, "rows": rows,
                 "warnings": [f"{r['case_id']} has a reviewer override that this change would put up for recheck."
                              for r in rows if r["changed"] and r["has_override"]],
+                # quality of the draft on labelled cases, before it goes live (changed cases reported separately)
+                "draft_quality": evaluate(self.labelled_rows(), [existing[0], draft]),
             }
 
     def publish_policy(self, draft: dict, published_by: str, approved_by: str, note: str) -> dict:
@@ -233,15 +278,36 @@ class Store:
             if draft.get("rules") == latest["rules"] and draft.get("default") == latest["default"]:
                 raise StoreError(f"This draft is identical to {latest['version']}. Change a rule before publishing.", 409)
             draft["published_by"], draft["approved_by"], draft["note"] = published_by, approved_by, note
-            preview = self.preview_policy(draft)
+            preview = self.preview_policy(draft, record=False)
             policy_mod.save_policy(draft, self.policy_dir)
             self.db.execute(
                 "INSERT INTO policy_meta VALUES(?,?,?,?,?,?)",
                 (draft["version"], draft.get("title", ""), published_by, approved_by, note, now()),
             )
             applied = self._apply_to_open_claims(draft)
+            published_at = now()
+            first = self._q("SELECT first_preview_at FROM policy_drafts WHERE version=?", (draft["version"],))
+            started = first[0]["first_preview_at"] if first and first[0]["first_preview_at"] else published_at
+            duration = int((datetime.fromisoformat(published_at) - datetime.fromisoformat(started)).total_seconds())
+            self.db.execute(
+                "INSERT INTO policy_drafts(version,first_preview_at,last_preview_at,previews,published_at,duration_seconds,"
+                "open_changed) VALUES(?,?,?,0,?,?,?) ON CONFLICT(version) DO UPDATE SET published_at=excluded.published_at,"
+                " duration_seconds=excluded.duration_seconds, open_changed=excluded.open_changed",
+                (draft["version"], started, started, published_at, duration, applied["open_changed"]))
             self.db.commit()
-            return {"version": draft["version"], "applied": applied, "preview": preview}
+            return {"version": draft["version"], "applied": applied, "preview": preview,
+                    "change_timing": self.change_timing(draft["version"])}
+
+    def change_timing(self, version: str | None = None) -> dict | list:
+        """How long a policy change took, from first impact preview to live release, from the stored timestamps."""
+        rows = self._q("SELECT * FROM policy_drafts WHERE published_at IS NOT NULL ORDER BY published_at")
+        out = [{"version": r["version"], "first_preview_at": r["first_preview_at"], "published_at": r["published_at"],
+                "previews": r["previews"], "duration_seconds": r["duration_seconds"],
+                "duration_minutes": round((r["duration_seconds"] or 0) / 60, 1),
+                "open_claims_rechecked": r["open_changed"]} for r in rows]
+        if version is not None:
+            return next((o for o in out if o["version"] == version), {})
+        return out
 
     def policy_overview(self) -> dict:
         meta = {r["version"]: dict(r) for r in self._q("SELECT * FROM policy_meta")}
@@ -257,12 +323,14 @@ class Store:
             n += 1
         return f"CLM-{n:04d}"
 
-    def _store_claim(self, row: dict, source: str, name: str = "", email: str = "", trigger: str = "intake") -> str:
+    def _store_claim(self, row: dict, source: str, name: str = "", email: str = "", trigger: str = "intake",
+                     source_overrides: dict | None = None) -> str:
         claim = normalize_claim(row)
         case_id = claim["case_id"] or self._next_case_id()
         if self._q("SELECT 1 FROM claims WHERE case_id=?", (case_id,)):
             raise StoreError(f"Case {case_id} already exists.", 409)
-        src = {f: ("blank" if claim["fact_status"][f] != "known" else source) for f in FIELD_ORDER}
+        src = {f: ("blank" if claim["fact_status"][f] != "known" else (source_overrides or {}).get(f, source))
+               for f in FIELD_ORDER}
         self.db.execute(
             "INSERT INTO claims(case_id,case_status,summary,facts,fact_status,fact_source,claimant_name,claimant_email,"
             "source,created_at,closed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
@@ -284,13 +352,62 @@ class Store:
             self._after_decision(case_id, d, claim)
         return case_id
 
+    def insurer_checks(self, form: dict) -> list[dict]:
+        """Facts a claimant cannot know, filled from (demo) insurer systems. A check that cannot run leaves the
+        fact blank, so the policy asks for it instead of guessing."""
+        policy_no = (form.get("policy_number") or "").strip().upper()
+        date = (form.get("incident_date") or "").strip()[:10]
+        stated, document = _amount(form.get("stated_quote_eur")), _amount(form.get("document_quote_eur"))
+        checks = []
+        # 1. policy administration: was the policy active on the incident date?
+        if not policy_no or not date:
+            checks.append({"field": "policy_active_on_incident", "value": "", "how": "No policy number or incident date given, so cover could not be checked."})
+        elif policy_no not in DEMO_POLICY_REGISTER:
+            checks.append({"field": "policy_active_on_incident", "value": "", "how": f"Policy {policy_no} was not found in the register."})
+        else:
+            start, end = DEMO_POLICY_REGISTER[policy_no]
+            active = start <= date <= end
+            checks.append({"field": "policy_active_on_incident", "value": "True" if active else "False",
+                           "how": f"Policy {policy_no} runs {start} to {end}; incident on {date}."})
+        # 2. claims register: same policy, same incident date already claimed?
+        if not policy_no or not date:
+            checks.append({"field": "duplicate_flag", "value": "", "how": "No policy number or incident date given, so the register could not be searched."})
+        else:
+            hits = [r["case_id"] for r in self._q(
+                "SELECT case_id FROM claim_meta WHERE policy_number=? AND incident_date=?", (policy_no, date))]
+            checks.append({"field": "duplicate_flag", "value": "True" if hits else "False",
+                           "how": f"Same policy and date already claimed in {', '.join(hits)}." if hits
+                           else "No earlier claim for this policy and incident date."})
+        # 3. document check: does the amount the claimant states match the quote document?
+        if stated is not None and document is not None and document > 0:
+            off = abs(stated - document) / document
+            checks.append({"field": "evidence_conflict", "value": "True" if off > 0.05 else "False",
+                           "how": f"Claimant states EUR {stated:,.0f}, the quote document says EUR {document:,.0f}."})
+        else:
+            checks.append({"field": "evidence_conflict", "value": "False",
+                           "how": "Only one amount was supplied, so there was nothing to contradict it."})
+        return checks
+
     def submit_claim(self, form: dict) -> dict:
         with self.lock:
             row = {k: form.get(k) for k in FIELD_ORDER}
             row["case_status"] = "open"
             row["claim_summary"] = (form.get("claim_summary") or "").strip()
+            checks = self.insurer_checks(form)
+            overrides = {}
+            for c in checks:
+                if (row.get(c["field"]) or "") == "":   # an explicit value sent by an internal form wins
+                    row[c["field"]] = c["value"]
+                    overrides[c["field"]] = INSURER_SOURCE
+                else:
+                    c["how"] = "Value supplied with the claim; not looked up."
             case_id = self._store_claim(row, "claimant_form", (form.get("claimant_name") or "").strip(),
-                                        (form.get("claimant_email") or "").strip())
+                                        (form.get("claimant_email") or "").strip(), source_overrides=overrides)
+            self.db.execute(
+                "INSERT INTO claim_meta(case_id,policy_number,incident_date,stated_quote_eur,document_quote_eur,insurer_checks)"
+                " VALUES(?,?,?,?,?,?)",
+                (case_id, (form.get("policy_number") or "").strip().upper(), (form.get("incident_date") or "").strip()[:10],
+                 str(form.get("stated_quote_eur") or ""), str(form.get("document_quote_eur") or ""), json.dumps(checks)))
             self.db.commit()
             return self.get_claim(case_id)
 
@@ -355,6 +472,11 @@ class Store:
             "outcomes": [dict(r) for r in self._q("SELECT * FROM outcomes WHERE case_id=? ORDER BY id", (case_id,))],
             "labels": {r["version"]: r["expected"] for r in self._q("SELECT * FROM labels WHERE case_id=?", (case_id,))},
             "editable": row["case_status"] == "open",
+            "closed_at": row["closed_at"],
+            "insurer_checks": (lambda r: json.loads(r[0]["insurer_checks"] or "[]") if r else [])(
+                self._q("SELECT insurer_checks FROM claim_meta WHERE case_id=?", (case_id,))),
+            "settlement": (lambda r: dict(r[0]) if r else None)(
+                self._q("SELECT * FROM settlements WHERE case_id=? ORDER BY id DESC LIMIT 1", (case_id,))),
         }
 
     def list_claims(self, status: str | None = None) -> list[dict]:
@@ -378,6 +500,8 @@ class Store:
                 "rule": f"{latest['policy_version']}:{latest['rule_id']}" if latest else None,
                 "effective_recommendation": eff, "effective_source": eff_src,
                 "recheck_pending": bool(pend),
+                "settled_decision": (lambda r: r[0]["decision"] if r else None)(
+                    self._q("SELECT decision FROM settlements WHERE case_id=? ORDER BY id DESC LIMIT 1", (row["case_id"],))),
             })
         return out
 
@@ -480,6 +604,35 @@ class Store:
             self.db.commit()
             return self.get_claim(case_id)
 
+    def settle(self, case_id: str, decision: str, reason: str, reviewer: str) -> dict:
+        """A reviewer closes the claim with a final decision. Closed claims cannot be reopened or re-decided."""
+        reviewer = (reviewer or "").strip()
+        reason = (reason or "").strip()
+        if decision not in SETTLE_DECISIONS:
+            raise StoreError(f"Pick one of: {', '.join(SETTLE_DECISIONS)}.")
+        if not reviewer:
+            raise StoreError("A reviewer name is required.")
+        with self.lock:
+            self._require_open(case_id)
+            cur = self._latest_decision(case_id)
+            eff, _ = self._effective(case_id, cur)
+            if decision == "decline" and not reason:
+                raise StoreError("Say why you are declining. The reason is recorded and the claim closes for good.")
+            if decision == "approve" and eff != "routine_processing" and not reason:
+                raise StoreError(f"The current recommendation is {eff}. Say why you approve it anyway.")
+            ts = now()
+            self.db.execute(
+                "INSERT INTO settlements(case_id,decision,reason,reviewer,policy_version,system_recommendation,"
+                "effective_recommendation,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                (case_id, decision, reason, reviewer, cur["policy_version"] if cur else "", cur["recommendation"] if cur else "",
+                 eff, ts))
+            self.db.execute("UPDATE claims SET case_status='closed', closed_at=? WHERE case_id=?", (ts, case_id))
+            self.db.execute("UPDATE rechecks SET status='resolved', resolved_at=? WHERE case_id=? AND status='pending'",
+                            (ts, case_id))
+            self.db.execute("UPDATE info_requests SET status='closed' WHERE case_id=? AND status='open'", (case_id,))
+            self.db.commit()
+            return self.get_claim(case_id)
+
     def answer_info(self, case_id: str, values: dict, name: str = "") -> dict:
         """Claimant supplies the facts we asked for. Values are marked as stated, not verified."""
         with self.lock:
@@ -579,6 +732,9 @@ class Store:
             "closed_changed": 0,  # closed claims are never re-decided
             "recheck_total": len(rows), "recheck_pending": sum(r["status"] == "pending" for r in rows),
             "moves": moves, "rechecks": [dict(r) for r in rows],
+            "policy_changes": self.change_timing(),
+            "settled": {d: self._q("SELECT COUNT(*) c FROM settlements WHERE decision=?", (d,))[0]["c"]
+                        for d in SETTLE_DECISIONS},
         }
 
     def outbox(self) -> list[dict]:
@@ -598,6 +754,14 @@ class Store:
         for r in self._q("SELECT * FROM policy_meta"):
             events.append({"at": r["created_at"], "type": "policy_published", "case_id": "", "by": r["published_by"],
                            "detail": f"{r['version']} approved by {r['approved_by'] or 'n/a'}. {r['note'] or ''}",
+                           "policy_version": r["version"]})
+        for r in self._q("SELECT * FROM settlements"):
+            events.append({"at": r["created_at"], "type": "settled", "case_id": r["case_id"], "by": r["reviewer"],
+                           "detail": f"{r['decision']} (system said {r['system_recommendation']}). {r['reason'] or ''}",
+                           "policy_version": r["policy_version"]})
+        for r in self._q("SELECT * FROM policy_drafts WHERE published_at IS NOT NULL"):
+            events.append({"at": r["published_at"], "type": "policy_change_time", "case_id": "", "by": "",
+                           "detail": f"{r['version']}: first preview to release in {round((r['duration_seconds'] or 0)/60, 1)} min",
                            "policy_version": r["version"]})
         events.sort(key=lambda e: e["at"], reverse=True)
         return events[:limit]
