@@ -1,0 +1,22 @@
+# Canoe policy document. Plain sentences, one rule per line.
+# Rules run top to bottom and the first one that applies decides.
+# Lines starting with # are comments. This file is policy v2 written out in full.
+
+Version: v2
+Title: Fictional motor claims triage, policy v2
+
+# Known reasons for human review come first. They beat a missing document.
+Send to human_review if policy_active_on_incident is false because The policy was not active on the incident date.
+Send to human_review if claim_type is not motor_own_damage because The claim type is not motor_own_damage.
+Send to human_review if injury_reported is true because An injury was reported.
+Send to human_review if liability_disputed is true because Liability is disputed.
+Send to human_review if duplicate_flag is true because The claim is flagged as a duplicate.
+Send to human_review if evidence_conflict is true because The evidence contains a conflict.
+Send to human_review if quote_eur is greater than 1200 because The repair quote is above the routine limit of EUR 1,200.
+Send to human_review if repair_type is ev_high_voltage_battery because EV high-voltage battery work requires human review whatever the quote.
+
+# Missing documents. "or blank" means a blank field counts as missing.
+Send to request_information if incident_report_present is false or blank because The incident report is missing.
+Send to request_information if itemized_quote_present is false or blank because The itemized quote is missing.
+
+Otherwise routine_processing

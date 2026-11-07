@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from canoe import batch, policy, quality
+from canoe import batch, policy, policy_text, quality
 from canoe.engine import decide, normalize_claim
 from canoe.store import Store, StoreError
 
@@ -81,6 +81,106 @@ class EngineTests(unittest.TestCase):
         d = decide(normalize_claim(rows(DEV)[3]), v1())
         self.assertEqual(d["policy_version"], "v1")
         self.assertEqual(d["full_rule_id"], "v1:R1.quote_over_limit")
+
+
+class RealV2Tests(unittest.TestCase):
+    """policies/v2.json must match the official change notice."""
+
+    def setUp(self):
+        self.v2 = policy.load_policy(ROOT / "policies" / "v2.json")
+
+    def rec(self, **over):
+        row = dict(rows(DEV)[0])  # a complete, routine claim
+        row.update({k: str(v) for k, v in over.items()})
+        return decide(normalize_claim(row), self.v2)["recommendation"]
+
+    def test_limit_boundary_is_1200(self):
+        self.assertEqual(self.rec(quote_eur=1200), "routine_processing")
+        self.assertEqual(self.rec(quote_eur=1201), "human_review")
+
+    def test_ev_battery_always_review_and_beats_missing_documents(self):
+        self.assertEqual(self.rec(repair_type="ev_high_voltage_battery", quote_eur=100), "human_review")
+        self.assertEqual(self.rec(repair_type="ev_high_voltage_battery", itemized_quote_present="False"), "human_review")
+
+    def test_v2_labels_on_dev_cases(self):
+        for r in csv.DictReader(open(ROOT / "data" / "labelled_development_cases_v2.csv", encoding="utf-8-sig")):
+            got = decide(normalize_claim(r), self.v2)["recommendation"]
+            self.assertEqual(got, r["expected_v2"], r["case_id"])
+
+
+class PolicyTextTests(unittest.TestCase):
+    """A policy written as sentences must behave exactly like the JSON policy."""
+
+    TEMPLATE = ROOT / "docs" / "policy_template.txt"
+
+    def test_template_matches_official_v2_on_random_claims(self):
+        import random
+        parsed = policy_text.parse_policy_text(self.TEMPLATE.read_text(encoding="utf-8"))
+        self.assertEqual(parsed["warnings"], [])
+        draft = {"version": "v2", "rules": parsed["rules"], "default": parsed["default"]}
+        policy.validate(draft)
+        official = policy.load_policy(ROOT / "policies" / "v2.json")
+        rnd = random.Random(7)
+        pick = rnd.choice
+        for i in range(1500):
+            row = {"case_id": str(i), "case_status": "open",
+                   "policy_active_on_incident": pick(["True", "False", ""]), "claim_type": pick(["motor_own_damage", "theft", ""]),
+                   "repair_type": pick(["standard", "ev_high_voltage_battery", ""]),
+                   "quote_eur": pick(["", "300", "1200", "1201", "1500", "abc"]),
+                   "incident_report_present": pick(["True", "False", ""]), "itemized_quote_present": pick(["True", "False", ""]),
+                   "injury_reported": pick(["True", "False", ""]), "liability_disputed": pick(["True", "False"]),
+                   "duplicate_flag": pick(["True", "False"]), "evidence_conflict": pick(["True", "False"])}
+            c = normalize_claim(row)
+            self.assertEqual(decide(c, draft)["recommendation"], decide(c, official)["recommendation"], row)
+
+    def test_unreadable_line_blocks_the_draft_instead_of_skipping_it(self):
+        for bad in ["Send to human_review if quote is greater than 1200",
+                    "Send to human_review if quote_eur is bigger-ish than 1200",
+                    "Send to human_review if injury_reported is true and claim_type is theft or duplicate_flag is true",
+                    "Send to human_review if vehicle_age is greater than 15",
+                    "Send to human_review if repair_type is true"]:
+            res = policy_text.parse_policy_text("Send to human_review if injury_reported is true\n" + bad)
+            self.assertTrue(any(l["status"] == "error" for l in res["lines"]), bad)
+
+    def test_routine_cannot_be_a_rule_and_prose_is_ignored(self):
+        res = policy_text.parse_policy_text("Send to routine_processing if quote_eur is greater than 5\nThis is just a sentence.")
+        self.assertEqual([l["status"] for l in res["lines"]], ["error", "ignored"])
+
+    def test_numbering_markdown_and_euro_formats(self):
+        res = policy_text.parse_policy_text("# Policy\nVersion: 3\n1. Send to human_review if quote_eur is above €1,250.50.\n- Request information if itemized_quote_present is false or blank")
+        self.assertEqual(res["version"], "v3")
+        self.assertEqual(res["rules"][0]["when"], [{"field": "quote_eur", "op": "gt", "value": 1250.5}])
+        self.assertTrue(res["rules"][1]["blank_counts_as_match"])
+
+    def test_or_splits_into_rules_and_value_lists_keep_their_or(self):
+        res = policy_text.parse_policy_text(
+            "Send to human_review if injury_reported is true or duplicate_flag is true\n"
+            "Send to human_review if claim_type is one of theft or other")
+        self.assertEqual([r["id"] for r in res["rules"]], ["R1.injury_reported", "R1.duplicate_flag", "R1.claim_type"])
+        self.assertEqual(res["rules"][2]["when"][0]["value"], ["theft", "other"])
+
+    def test_add_mode_keeps_review_rules_ahead_of_missing_documents(self):
+        existing = policy.load_policy(ROOT / "policies" / "v1.json")["rules"]
+        new = policy_text.parse_policy_text("Send to human_review if quote_eur is greater than 1000\n"
+                                            "Send to human_review if injury_reported is true")["rules"]
+        merged, notes = policy_text.add_to(existing, new)
+        ids = [r["id"] for r in merged]
+        self.assertLess(ids.index("R1.quote_eur"), ids.index("R2.incident_report_missing"))
+        self.assertEqual(len(merged), len(existing) + 1)  # the injury rule already existed
+        self.assertTrue(any("Skipped" in n for n in notes))
+
+    def test_docx_is_read(self):
+        import io
+        import zipfile
+        xml = ('<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+               "<w:p><w:r><w:t>Send to human_review if quote_eur is greater than 900</w:t></w:r></w:p></w:body></w:document>")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("word/document.xml", xml)
+        res = policy_text.parse_policy_text(policy_text.extract_text(buf.getvalue()))
+        self.assertEqual(res["rules"][0]["when"][0]["value"], 900)
+        with self.assertRaises(policy_text.ParseProblem):
+            policy_text.extract_text(b"PK\x03\x04not really a zip")
 
 
 class PolicyTests(unittest.TestCase):

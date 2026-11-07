@@ -60,7 +60,8 @@ async function api(path, opts = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   let body = opts.body;
-  if (body !== undefined && typeof body === 'object') { headers['Content-Type'] = 'application/json'; body = JSON.stringify(body); }
+  if (body instanceof ArrayBuffer) headers['Content-Type'] = 'application/octet-stream';
+  else if (body !== undefined && typeof body === 'object') { headers['Content-Type'] = 'application/json'; body = JSON.stringify(body); }
   else if (typeof body === 'string') headers['Content-Type'] = 'text/csv';
   const res = await fetch(`/api${path}`, { method: opts.method || (body !== undefined ? 'POST' : 'GET'), headers, body });
   if (res.status === 401) {
@@ -452,7 +453,12 @@ async function reviewDetail(id) {
 }
 
 // ---- policy owner ---------------------------------------------------
-let draft = null, policyInfo = null, jsonMode = false;
+let draft = null, policyInfo = null, jsonMode = false, editorOpen = false, lastParse = null, parseMode = 'replace';
+const OUT_LABEL = { human_review: 'Human review', request_information: 'Request information' };
+function ruleSentence(r) {
+  const conds = condList(r).map((c) => `${c.field} ${(OPS.find((o) => o[0] === c.op) || [, c.op])[1]}${noValue(c.op) ? '' : ` ${Array.isArray(c.value) ? c.value.join(', ') : c.value}`}`).join(' and ');
+  return `${conds}${r.blank_counts_as_match ? ' or is blank' : ''}`;
+}
 const OPS = [['is_true', 'is yes'], ['is_false', 'is no'], ['eq', 'equals'], ['neq', 'does not equal'], ['gt', 'greater than'], ['gte', 'at least'], ['lt', 'less than'], ['lte', 'at most'], ['in', 'is one of'], ['not_in', 'is none of']];
 const noValue = (op) => op === 'is_true' || op === 'is_false';
 function condList(rule) { const w = rule.when; return Array.isArray(w) ? w : (w.all || [w]); }
@@ -464,6 +470,16 @@ function viewPolicy() {
     drawPolicy();
   });
 }
+function parseReport() {
+  if (!lastParse) return '';
+  const r = lastParse;
+  const rows = r.lines.filter((l) => l.status !== 'ignored' || !/comment|heading/.test(l.detail));
+  const list = rows.map((l) => `<div class="pl ${esc(l.status)}"><span class="mono">${l.n}</span><span>${esc(l.text)}</span><span class="d">${esc(l.status === 'ok' ? l.detail : l.detail)}</span></div>`).join('');
+  const head = r.has_errors
+    ? '<div class="notice"><strong>Some lines could not be read, so the draft was not changed.</strong> Fix the lines marked in red and upload again. Nothing is guessed.</div>'
+    : `<div class="notice calm"><strong>${r.draft.rules.length} rules are in the draft below.</strong> Check the list, then preview the impact.${r.notes.length ? `<br>${r.notes.map(esc).join('<br>')}` : ''}</div>`;
+  return `${head}${r.warnings.filter((w) => !/^Line /.test(w)).map((w) => `<div class="caption">${esc(w)}</div>`).join('')}<div class="plist">${list}</div>`;
+}
 function drawPolicy() {
   const latest = policyInfo.versions[policyInfo.versions.length - 1];
   const next = `v${parseInt(latest.version.slice(1), 10) + 1}`;
@@ -471,8 +487,18 @@ function drawPolicy() {
   $('#main').innerHTML = `<div class="wrap page"><div class="page-head"><div><div class="eyebrow">POLICY CHANGES</div><h1>Policy ${esc(latest.version)} is live.</h1>
     <p>Rules run top to bottom and the first match decides. Edit a copy below, preview the effect, then publish it as ${next}.</p></div>
     <div class="ver-strip">${policyInfo.versions.map((p) => `<span class="version-tag"${p.version === latest.version ? ' style="background:var(--ink);color:var(--paper)"' : ''}>${esc(p.version)}${p.meta && p.meta.approved_by ? ` · approved by ${esc(p.meta.approved_by)}` : ''}</span>`).join('')}</div></div>
-    <div class="grid2" style="grid-template-columns:1.35fr 1fr;align-items:start"><div class="stack">
-      <div class="row between"><h2 style="font-size:30px">Draft ${next}</h2><div class="row"><button class="btn btn-ghost btn-sm" id="reset">Start again from ${esc(latest.version)}</button><button class="btn btn-ghost btn-sm" id="json-toggle">${jsonMode ? 'Back to editor' : 'Edit as JSON'}</button></div></div>
+    <div class="grid2 wide" style="align-items:start"><div class="stack">
+      <div class="card pad stack"><div><h2 style="font-size:28px">Upload a policy document</h2>
+        <p class="muted" style="margin-top:6px">A .txt, .md or .docx written in plain sentences, one rule per line, for example <span class="mono">Send to human_review if quote_eur is greater than 1200</span>. <a href="/policy_template.txt" download>Download the template</a>.</p></div>
+        <div class="row"><label class="row" style="gap:6px;font-size:14px"><input type="radio" name="mode" value="replace"${parseMode === 'replace' ? ' checked' : ''}> This document is the whole policy</label>
+          <label class="row" style="gap:6px;font-size:14px"><input type="radio" name="mode" value="add"${parseMode === 'add' ? ' checked' : ''}> Add these rules to the current ones</label></div>
+        <label class="drop" id="doc-drop" tabindex="0"><input type="file" id="doc-file" accept=".txt,.md,.docx" class="hide"><h3>Choose a policy document</h3><p class="muted">or drop it here</p></label>
+        ${parseReport()}</div>
+      <div class="row between"><h2 style="font-size:30px">Draft ${next}</h2><button class="btn btn-ghost btn-sm" id="reset">Start again from ${esc(latest.version)}</button></div>
+      <ol class="sentences">${draft.rules.map((r, i) => `<li><span class="ord">${i + 1}</span><div><span class="pill ${esc(r.outcome)}">${esc(OUT_LABEL[r.outcome] || r.outcome)}</span> <span class="mono">if ${esc(ruleSentence(r))}</span><div class="why">${esc(r.reason)}</div></div></li>`).join('')}
+        <li class="last"><span class="ord">·</span><div><span class="pill routine_processing">Routine processing</span> <span class="mono">otherwise</span></div></li></ol>
+      <details class="card pad" id="editor"${editorOpen || jsonMode ? ' open' : ''}><summary style="cursor:pointer;font-weight:500">Edit rules by hand</summary>
+        <div class="stack" style="margin-top:14px"><div class="row"><button class="btn btn-ghost btn-sm" id="json-toggle">${jsonMode ? 'Back to editor' : 'Edit as JSON'}</button></div>
       ${jsonMode ? `<textarea id="json-area" style="min-height:420px;font:12.5px var(--mono)">${esc(JSON.stringify({ title: draft.title, rules: draft.rules, default: draft.default }, null, 2))}</textarea><div><button class="btn btn-ink btn-sm" id="json-apply">Apply JSON</button></div>`
       : `<div id="rules" class="stack">${draft.rules.map((r, ri) => `<div class="rule" data-ri="${ri}"><div class="rule-top"><span class="ord">${ri + 1}</span>
         <input type="text" data-k="id" value="${esc(r.id)}" aria-label="Rule id"><select data-k="outcome" aria-label="Outcome"><option value="human_review"${r.outcome === 'human_review' ? ' selected' : ''}>Human review</option><option value="request_information"${r.outcome === 'request_information' ? ' selected' : ''}>Request information</option></select>
@@ -483,13 +509,31 @@ function drawPolicy() {
         <div class="row"><button class="btn btn-ghost btn-sm" data-act="addcond">Add condition (all must hold)</button>${r.outcome === 'request_information' ? `<label class="row" style="gap:6px;font-size:13px"><input type="checkbox" data-k="blank_counts_as_match"${r.blank_counts_as_match ? ' checked' : ''}> A blank counts as missing</label>` : ''}</div></div>`).join('')}
         <div class="rule" style="background:var(--sand)"><div class="row between"><strong>${esc(draft.default.id)}</strong>${pill('routine_processing')}</div><p class="muted" style="font-size:13px">${esc(draft.default.reason)}</p></div></div>
         <div><button class="btn btn-ghost" id="add-rule">Add a rule</button></div>`}
+        </div></details>
       <div class="row"><button class="btn btn-ink" id="preview">Preview impact</button></div></div>
       <div class="stack"><div id="impact" class="card pad"><h3 style="font-size:24px">Impact preview</h3><p class="muted" style="margin-top:6px">Nothing has changed yet. Preview shows which open claims would move and confirms closed claims stay as they are.</p></div></div></div></div>`;
   bindPolicy(next);
 }
 function bindPolicy(next) {
   const redraw = () => drawPolicy();
-  $('#reset').addEventListener('click', () => { draft = null; viewPolicy(); });
+  $('#reset').addEventListener('click', () => { draft = null; lastParse = null; viewPolicy(); });
+  $('#editor').addEventListener('toggle', (e) => { editorOpen = e.target.open; });
+  $$('input[name=mode]').forEach((r) => r.addEventListener('change', () => { parseMode = r.value; }));
+  const doc = $('#doc-file'), drop = $('#doc-drop');
+  const readDoc = async (file) => {
+    try {
+      const r = await api(`/policy/parse?mode=${parseMode}`, { body: await file.arrayBuffer() });
+      lastParse = r;
+      if (r.has_errors) toast('Some lines could not be read. The draft was not changed.', true);
+      else { draft.rules = r.draft.rules; draft.title = r.draft.title || draft.title; draft.default = r.draft.default; toast(`${r.draft.rules.length} rules read from ${file.name}.`); }
+      redraw();
+    } catch (e) { fail(e); }
+  };
+  doc.addEventListener('change', () => doc.files[0] && readDoc(doc.files[0]));
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); e.dataTransfer.files[0] && readDoc(e.dataTransfer.files[0]); });
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doc.click(); } });
   $('#json-toggle').addEventListener('click', () => { jsonMode = !jsonMode; redraw(); });
   if (jsonMode) {
     $('#json-apply').addEventListener('click', () => { try { const j = JSON.parse($('#json-area').value); draft.rules = j.rules; draft.title = j.title || draft.title; draft.default = j.default || draft.default; jsonMode = false; toast('JSON applied.'); redraw(); } catch (e) { fail(new Error(`That is not valid JSON: ${e.message}`)); } });
@@ -564,7 +608,7 @@ function viewBusiness() {
           <td>${pill(c.effective_recommendation)}<div class="mono faint">${esc(c.rule)}</div></td><td class="m">${esc(c.effective_source.replace('_', ' '))}</td><td>${c.recheck_pending ? '<span class="pill pending">pending</span>' : ''}</td></tr>`).join('')}</tbody></table></div><p class="caption">${rows.length} of ${list.length} claims. Click a row to open it in the review queue.</p>`;
     } else if (bizTab === 'impact') {
       const only1 = impact.versions.length === 1;
-      body = only1 ? `<div class="card empty"><h3>No policy change yet</h3><p>Publish a new version on the Policy changes page and its effect shows up here.</p></div>` : `<div class="stack"><div class="grid3" style="grid-template-columns:repeat(4,1fr)">
+      body = only1 ? `<div class="card empty"><h3>No policy change yet</h3><p>Publish a new version on the Policy changes page and its effect shows up here.</p></div>` : `<div class="stack"><div class="grid3 four">
         <div class="card stat"><div class="big">${impact.open_claims}</div><div class="lab">open claims re-decided under ${esc(impact.latest_version)}</div></div>
         <div class="card stat"><div class="big bad">${impact.recheck_total}</div><div class="lab">changed and flagged for recheck</div></div>
         <div class="card stat"><div class="big">${impact.recheck_pending}</div><div class="lab">still waiting for a reviewer</div></div>

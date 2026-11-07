@@ -47,7 +47,15 @@ Open http://localhost:8000. The first start loads the supplied development and p
 
 Demo sign-in has no passwords. The name you enter is stored with every override, edit and publish.
 
-## Saturday runbook: the policy change (v2)
+## Writing a policy as a document
+
+The policy owner can upload a `.txt`, `.md` or `.docx` on the **Policy changes** page instead of using the rule editor. One rule per sentence, for example `Send to human_review if quote_eur is greater than 1200`. The template is `docs/policy_template.txt` (it is policy v2 written out). No AI is involved: the same text always gives the same rules, and any line that cannot be read stops the upload and is named, so a rule is never silently dropped. The result is a draft; it is previewed and published with an approver like any other change, and saved as `policies/vN.json`.
+
+## Policy v2 (official change notice)
+
+`policies/v2.json` applies the notice: the quote limit falls to EUR 1,200 (exactly 1,200 stays routine) and `repair_type = ev_high_voltage_battery` always goes to human review, ahead of the missing-document rules. `data/labelled_development_cases_v2.csv` holds the dev cases with hand-derived `expected_v2` labels.
+
+## Saturday runbook: the policy change (v2) (already applied; kept as the general procedure)
 
 1. Open **Policy changes**. Edit the rules (or use *Edit as JSON*). Click **Preview impact**: it lists every open claim that would move and confirms closed claims stay put.
 2. Click **Publish v2** with an author and an approver. This writes `policies/v2.json`, re-decides all **open** claims, flags the changed ones for recheck, and leaves **closed** claims exactly as they were.
@@ -62,7 +70,7 @@ You can also skip the website: copy `policies/v1.json` to `policies/v2.json`, ed
 python -m unittest discover -s tests -v
 ```
 
-22 tests cover the 14 labelled cases, the 1,500 boundary, every blank field, unreadable values, closed-claim protection, override recording, policy publishing and the batch columns.
+32 tests cover the 14 labelled cases, the 1,500 boundary, every blank field, unreadable values, closed-claim protection, override recording, policy publishing and the batch columns.
 
 ## Measured results on the supplied labelled cases (policy v1)
 

@@ -77,6 +77,8 @@ def build(name, start, signed_in=True, scroll=None, desktop=False):
         pre += "window.__SIGNED__=true;\n"
     user_js = 'let user = {name: "Rita Reviewer"};' if signed_in else "let user = null;"
     page_js = js.replace("let user = null;", user_js, 1)
+    if signed_in:  # also skip the line that reloads a saved user from sessionStorage
+        page_js = page_js.replace("try { user = JSON.parse(ss.get('canoe_user') || 'null'); } catch { user = null; }", "", 1)
     inject = "<script>" + pre + mock + "</script><script>" + page_js + "</script>"
     if scroll:
         inject += ("<script>setTimeout(function(){var e=document.querySelector(" + json.dumps(scroll) +
@@ -95,6 +97,9 @@ build("d_outcomes.html", "#/", scroll=".section", desktop=True)
 build("d_reviewer.html", "#/reviewers/PRA-003", desktop=True)
 build("d_reviewer_low.html", "#/reviewers/PRA-003", scroll="#override-form", desktop=True)
 build("d_policy.html", "#/policy", desktop=True)
+build("pol_top.html", "#/policy")
+build("pol_sentences.html", "#/policy", scroll=".sentences")
+build("pol_editor.html", "#/policy", scroll="#editor")
 build("d_business.html", "#/business", desktop=True)
 build("d_triage.html", "#/triage", desktop=True)
 build("preview_home.html", "#/")

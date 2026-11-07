@@ -27,6 +27,7 @@ Errors: `{ "error": "plain-language message" }` with status 400, 401, 404, 409.
 | Call | Body |
 |---|---|
 | `GET /api/policy` | Versions with rules, plus the field list. |
+| `POST /api/policy/parse?mode=replace\|add` | Body: the raw bytes of a `.txt`, `.md` or `.docx` policy written in plain sentences (see `docs/policy_template.txt`). Returns `{draft, lines[], warnings[], notes[], has_errors}`. `draft` is null if any line could not be read (nothing is guessed). `mode=replace` treats the file as the whole policy; `mode=add` inserts its rules into the current ones, review rules ahead of missing-document rules. Writes nothing; pass `draft` to preview/publish. |
 | `POST /api/policy/preview` | `{draft: {title, rules, default}}`. Dry run: counts, moves, per-claim rows. Writes nothing. |
 | `POST /api/policy/publish` | `{draft, published_by, approved_by, note}`. Writes the next version, re-decides open claims, flags rechecks, leaves closed claims alone. |
 

@@ -24,6 +24,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import batch as batch_mod
+from . import policy as policy_mod
+from . import policy_text
 from .policy import PolicyError
 from .store import Store, StoreError
 
@@ -179,6 +181,8 @@ class Handler(BaseHTTPRequestHandler):
             if parts[2] == "outcome":
                 return s.record_outcome(cid, body.get("final_outcome", ""), body.get("source", ""),
                                         body.get("note", ""), body.get("recorded_by", ""))
+        if parts == ["policy", "parse"]:
+            return self._parse_policy(s, query)
         if parts == ["policy", "preview"]:
             return s.preview_policy(self._json_body().get("draft") or {})
         if parts == ["policy", "publish"]:
@@ -190,6 +194,38 @@ class Handler(BaseHTTPRequestHandler):
             text = self._body().decode("utf-8-sig", errors="replace")
             return s.import_claims_csv(text, "labelled_import", labelled=True)
         raise StoreError("Not found", 404)
+
+    def _parse_policy(self, s: Store, query: dict):
+        """Read a policy written in plain sentences (.txt, .md, .docx) into a draft. Writes nothing."""
+        data = self._body()
+        if not data:
+            raise StoreError("The file is empty.")
+        try:
+            text = policy_text.extract_text(data)
+        except policy_text.ParseProblem as exc:
+            raise StoreError(str(exc))
+        parsed = policy_text.parse_policy_text(text)
+        latest = s.latest_policy()
+        lines = [l for l in parsed["lines"] if not (l["status"] == "ignored" and l["detail"] in ("comment", "heading or comment"))]
+        errors = [l for l in parsed["lines"] if l["status"] == "error"]
+        out = {"mode": query.get("mode", "replace"), "lines": lines, "warnings": parsed["warnings"], "notes": [],
+               "has_errors": bool(errors), "draft": None, "version_in_document": parsed["version"]}
+        if errors:
+            return out  # never hand back a partial draft: a skipped rule could send a claim to routine processing
+        if not parsed["rules"]:
+            raise StoreError("No rules found. Write each rule as a sentence such as "
+                             "'Send to human_review if quote_eur is greater than 1200'. See the template.")
+        if out["mode"] == "add":
+            rules, out["notes"] = policy_text.add_to(latest["rules"], parsed["rules"])
+        else:
+            rules = parsed["rules"]
+        draft = {"title": parsed["title"] or latest.get("title", ""), "rules": rules, "default": latest["default"]}
+        policy_mod.validate({**draft, "version": "v1"})
+        nxt = policy_mod.next_version(s.policies())
+        if parsed["version"] and parsed["version"] != nxt:
+            out["warnings"].append(f"The document says {parsed['version']}, but the next version will be {nxt}. The number is assigned when you publish.")
+        out["draft"] = draft
+        return out
 
     def _batch(self, s: Store, query: dict):
         text = self._body().decode("utf-8-sig", errors="replace")
