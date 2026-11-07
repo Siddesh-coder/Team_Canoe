@@ -43,6 +43,8 @@ A rule: `{id, outcome: "human_review"|"request_information", reason, when: [{fie
 | `POST /api/batch?save=1&format=csv` | Body: claims CSV as raw text (`Content-Type: text/csv`). Returns `{columns, results[], csv}`; with `format=csv` returns the file. `save=1` also adds claims to the register. |
 | `POST /api/labelled-import` | Body: CSV text with `expected_v1` / `expected_v2` columns. |
 
-## Prompt to paste into Lovable
+## Rules for any frontend
 
-> Build a React app for an insurer's claims triage called Canoe. It only calls the REST API described below; it has no decision logic of its own. Pages: a public claim form with three outcomes shown clearly (routine_processing, request_information, human_review) and a Batch tab that uploads a CSV to `POST /api/batch`; a reviewer dashboard with a queue, a facts table where blank values show as "blank: absent", the rule that fired, the policy version, a history timeline, and an override form that requires a reason and shows the reviewer name; a policy owner page that edits an ordered list of rules, previews impact with `POST /api/policy/preview`, and publishes with an approver; a business page with claim history, a policy-impact tab and an error-rate table from `/api/quality`. Closed claims are read-only. Never show a guessed value as a confirmed fact. Use the base URL from an environment variable `VITE_API_URL` and send `Authorization: Bearer` with `VITE_API_TOKEN` if set. [paste the endpoint tables above]
+* The frontend never makes or changes a decision. It only shows what the API returns.
+* Send a "not known" answer as an empty string `""`, never as `"False"`. A blank leads to request_information; "False" can wrongly lead to routine_processing.
+* Closed claims are read-only.

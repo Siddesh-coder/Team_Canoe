@@ -545,47 +545,6 @@ function bindPolicy(next) {
 }
 function draftBody() { return { title: draft.title, rules: draft.rules, default: draft.default, note: draft.note }; }
 
-// ---- measurement ----------------------------------------------------
-async function viewMeasurement() {
-  setWho(null);
-  $('#main').innerHTML = '<div class="wrap page"><div class="empty">Loading the quality report…</div></div>';
-  let q; try { q = await api('/quality'); } catch (e) { return fail(e); }
-  const vers = Object.values(q.versions);
-  const statCard = (v) => !v.labelled_cases ? `<div class="card stat"><div class="eyebrow">POLICY ${esc(v.policy_version.toUpperCase())}</div><p class="muted" style="margin-top:10px">${esc(v.note)}</p></div>` :
-    `<div class="card stat"><div class="eyebrow">POLICY ${esc(v.policy_version.toUpperCase())} · ${v.labelled_cases} LABELLED CASES</div>
-      <div class="grid3" style="margin-top:8px"><div><div class="big">${pct(v.accuracy)}</div><div class="lab">correct next step (${v.correct} of ${v.n})</div><div class="bar"><span style="width:${v.accuracy * 100}%"></span></div></div>
-      <div><div class="big ${v.incorrect_routine ? 'bad' : ''}">${v.incorrect_routine}</div><div class="lab">wrong routine recommendations (${pct(v.incorrect_routine_rate)})</div></div>
-      <div><div class="big">${v.unnecessary_human_review}</div><div class="lab">unnecessary escalations (${pct(v.unnecessary_human_review_rate)})</div></div></div></div>`;
-  const failures = vers.flatMap((v) => (v.failures || []).map((f) => ({ ...f, v: v.policy_version })));
-  const cc = q.changed_cases && q.changed_cases.count !== undefined ? q.changed_cases : null;
-  const m = q.monitoring;
-  $('#main').innerHTML = `<div class="wrap page"><div class="page-head"><div><div class="eyebrow">MEASUREMENT</div><h1>Is it still right?</h1>
-    <p>Results on labelled cases, by policy version. The costly mistake is sending a claim to routine processing that should not go there, so it is shown first.</p></div></div>
-    <div class="stack">${vers.map(statCard).join('')}
-    ${cc ? `<div class="card pad"><div class="eyebrow">CHANGED CASES · ${esc(cc.from_version)} TO ${esc(cc.to_version)}</div><h2 style="font-size:28px;margin:6px 0 10px">${cc.count} open cases changed. Reported on their own.</h2>
-      <p class="muted">${cc.labelled ? `${cc.correct_after} of ${cc.labelled} labelled changed cases are right under ${esc(cc.to_version)}.` : 'No labels for the new version yet. Import a labelled file with an expected_' + esc(cc.to_version) + ' column below.'} Fixed by the change: ${esc((cc.fixed || []).join(', ') || 'none')}. Made worse: ${esc((cc.regressions || []).join(', ') || 'none')}.</p>
-      ${cc.cases.length ? `<div class="table-wrap" style="margin-top:12px"><table class="data"><thead><tr><th>case</th><th>from</th><th>to</th><th>rule</th><th>label</th></tr></thead><tbody>${cc.cases.map((c) => `<tr><td class="m">${esc(c.case_id)}</td><td>${pill(c.from)}</td><td>${pill(c.to)}</td><td class="m">${esc(c.rule_after)}</td><td>${c.label_after ? pill(c.label_after) : '<span class="faint">no label</span>'}</td></tr>`).join('')}</tbody></table></div>` : ''}</div>` : ''}
-    <div class="card pad"><div class="eyebrow">WHERE IT GETS DECISIONS WRONG</div>${failures.length ? `<div class="table-wrap" style="margin-top:10px"><table class="data"><thead><tr><th>version</th><th>case</th><th>kind</th><th>said</th><th>label</th><th>rule</th></tr></thead><tbody>${failures.map((f) => `<tr><td class="m">${esc(f.v)}</td><td class="m">${esc(f.case_id)}</td><td class="${f.kind === 'incorrect_routine' ? 'rust' : ''}">${esc(f.kind.replace(/_/g, ' '))}</td><td>${pill(f.pred)}</td><td>${pill(f.label)}</td><td class="m">${esc(f.rule)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="margin-top:8px">No mistakes on the labelled cases for the versions that have labels. That says the rules match the written policy on these examples. It does not prove the rules cover every real claim.</p>'}</div>
-    <div class="card pad"><div class="eyebrow">BLANK AND UNREADABLE INPUTS</div><p class="muted" style="margin:6px 0 10px">${esc(q.notes[0])}</p>
-      <div class="table-wrap"><table class="data"><thead><tr><th>case</th><th>absent</th><th>result</th><th>rule</th><th>matches label</th></tr></thead><tbody>${q.blank_fields.map((b) => `<tr><td class="m">${esc(b.case_id)}</td><td class="m">${esc(b.absent_fields.join(', '))}</td><td>${pill(b.recommendation)}</td><td class="m">${esc(b.rule)}</td><td>${b.correct === null ? '<span class="faint">no label</span>' : b.correct ? 'yes' : '<span class="rust">no</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="dim">No claims with blank inputs.</td></tr>'}</tbody></table></div></div>
-    <div class="card pad"><div class="eyebrow">SIGNALS RECORDED SO FAR</div><div class="grid3" style="margin-top:10px">
-      <div><div class="big" style="font:500 36px var(--serif)">${m.overrides_recorded}</div><div class="muted">reviewer overrides recorded</div></div>
-      <div><div class="big" style="font:500 36px var(--serif)">${m.final_outcomes_recorded}</div><div class="muted">final outcomes recorded</div></div>
-      <div><div class="big" style="font:500 36px var(--serif)">${m.pending_rechecks}</div><div class="muted">rechecks pending</div></div></div>
-      <p class="caption">${m.override_rate === null ? 'The supplied data has no reviewer corrections, so no override rate is reported. Each override is stored and will feed this number.' : `Override rate: ${pct(m.override_rate)} of ${m.claims_with_reviewer_action} reviewed claims.`}</p></div>
-    <div class="card pad prose"><div class="eyebrow">HOW WE KEEP MEASURING AFTER LAUNCH</div>
-      <h3>Sampling</h3><ul><li>Every week a second reviewer, who does not see the system's answer, re-decides a random sample of routine_processing claims plus every claim within 10% of a threshold.</li><li>After any policy change, every changed open claim is reviewed once.</li></ul>
-      <h3>What triggers an investigation</h3><ul><li>Any incorrect routine_processing found in a sample.</li><li>Overrides on one rule running well above the usual level, or a final outcome that contradicts a routine recommendation.</li><li>A rise in blank fields from one source, or a shift in the share of routine decisions.</li></ul>
-      <h3>Who approves a change, and the rerun before release</h3><ul><li>The policy owner drafts and a second person approves. Both names are stored with the version.</li><li>Before release the draft is replayed on every stored case. Only the intended cases may change, nothing may get worse, and closed claims must stay as they were. The preview on the Policy changes page does exactly this.</li></ul>
-      <h3>When the true outcome arrives weeks later</h3><ul><li>It is stored apart from the recommendation and from any reviewer decision. The initial recommendation is never treated as the truth.</li><li>Error rates are recalculated by policy version as outcomes mature, and the new labels join the next test set.</li></ul></div>
-    <div class="card pad"><div class="eyebrow">ADD LABELS</div><p class="muted" style="margin:6px 0 10px">Paste a labelled CSV (with expected_v1 and, once v2 exists, expected_v2). Existing claims keep their data; the labels are added.</p>
-      <div class="row"><input type="file" id="lab-file" accept=".csv,text/csv"><button class="btn btn-ghost btn-sm" id="lab-go">Import labels</button></div></div></div></div>`;
-  $('#lab-go').addEventListener('click', () => {
-    const f = $('#lab-file').files[0]; if (!f) return toast('Choose a CSV file first.', true);
-    const rd = new FileReader(); rd.onload = async () => { try { const r = await api('/labelled-import', { body: String(rd.result) }); toast(`Labels imported. New claims: ${r.added.length}, existing updated: ${r.skipped_existing.length}.`); viewMeasurement(); } catch (e) { fail(e); } }; rd.readAsText(f);
-  });
-}
-
 // ---- business -------------------------------------------------------
 let bizTab = 'history', bizFilter = { status: '', q: '' };
 function csvText(rows) { return rows.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'); }
@@ -618,7 +577,9 @@ function viewBusiness() {
       body = `<div class="card pad stack"><p class="muted prose">These are the measured error rates the business case should use, taken from labelled cases. Rates are shares of all labelled cases. A wrong routine recommendation is the expensive error, so it is listed first.</p>
         <div class="table-wrap"><table class="data"><thead><tr><th>policy</th><th>labelled</th><th>wrong routine</th><th>wrong routine rate</th><th>unnecessary escalations</th><th>unnecessary rate</th><th>accuracy</th></tr></thead><tbody>${vs.map((v) => `<tr><td class="m">${esc(v.policy_version)}</td><td class="m">${v.n}</td><td class="m">${v.incorrect_routine}</td><td class="m rust">${pct(v.incorrect_routine_rate)}</td><td class="m">${v.unnecessary_human_review}</td><td class="m">${pct(v.unnecessary_human_review_rate)}</td><td class="m">${pct(v.accuracy)}</td></tr>`).join('')}</tbody></table></div>
         <div><button class="btn btn-ghost btn-sm" id="r-export">Export for the spreadsheet</button></div>
-        <p class="caption">With only 14 labelled cases these rates are a starting point. Treat zero errors as “none seen yet”, not as zero risk.</p></div>`;
+        <p class="caption">With only 14 labelled cases these rates are a starting point. Treat zero errors as “none seen yet”, not as zero risk.</p>
+        <hr class="rule"><div class="eyebrow">ADD LABELS</div><p class="muted" style="margin:6px 0 10px">Import a labelled CSV with expected_v1 and, once v2 exists, expected_v2, to measure a new policy version.</p>
+        <div class="row"><input type="file" id="lab-file" accept=".csv,text/csv"><button class="btn btn-ghost btn-sm" id="lab-go">Import labels</button></div></div>`;
     } else {
       body = `<div class="card pad"><div class="eyebrow">ACTIVITY LOG</div><div class="table-wrap" style="margin-top:10px"><table class="data"><thead><tr><th>time</th><th>event</th><th>case</th><th>by</th><th>version</th><th>detail</th></tr></thead><tbody>${audit.events.map((e) => `<tr><td class="m">${esc(fmtTime(e.at))}</td><td>${esc(e.type.replace('_', ' '))}</td><td class="m">${esc(e.case_id)}</td><td>${esc(e.by)}</td><td class="m">${esc(e.policy_version)}</td><td>${esc(e.detail)}</td></tr>`).join('') || '<tr><td colspan="6" class="dim">Nothing recorded yet.</td></tr>'}</tbody></table></div></div>`;
     }
@@ -629,6 +590,10 @@ function viewBusiness() {
     const st = $('#b-status'); if (st) st.addEventListener('change', (e) => { bizFilter.status = e.target.value; viewBusiness(); });
     const qq = $('#b-q'); if (qq) qq.addEventListener('change', (e) => { bizFilter.q = e.target.value; viewBusiness(); });
     const ex = $('#b-export'); if (ex) ex.addEventListener('click', () => download('claim_history.csv', csvText([['case_id', 'status', 'summary', 'quote_eur', 'recommendation_v1', 'latest_recommendation', 'policy_version', 'rule', 'decided_by', 'recheck_pending']].concat(list.map((c) => [c.case_id, c.case_status, c.summary, c.quote_eur, c.recommendation_v1, c.effective_recommendation, c.policy_version, c.rule, c.effective_source, c.recheck_pending])))));
+    const lg = $('#lab-go'); if (lg) lg.addEventListener('click', () => {
+      const f = $('#lab-file').files[0]; if (!f) return toast('Choose a CSV file first.', true);
+      const rd = new FileReader(); rd.onload = async () => { try { const r = await api('/labelled-import', { body: String(rd.result) }); toast(`Labels imported. New claims: ${r.added.length}, existing updated: ${r.skipped_existing.length}.`); viewBusiness(); } catch (e) { fail(e); } }; rd.readAsText(f);
+    });
     const rx = $('#r-export'); if (rx) rx.addEventListener('click', () => download('error_rates.csv', csvText([['policy', 'labelled', 'wrong_routine', 'wrong_routine_rate', 'unnecessary_escalations', 'unnecessary_rate', 'accuracy']].concat(Object.values(q.versions).filter((v) => v.labelled_cases).map((v) => [v.policy_version, v.n, v.incorrect_routine, v.incorrect_routine_rate, v.unnecessary_human_review, v.unnecessary_human_review_rate, v.accuracy])))));
   });
 }
@@ -638,7 +603,7 @@ const routes = [
   [/^$/, () => viewHome()], [/^triage$/, () => viewTriage('single')], [/^triage\/batch$/, () => viewTriage('batch')],
   [/^claim$/, () => viewClaim('')], [/^claim\/(.+)$/, (m) => viewClaim(decodeURIComponent(m[1]))],
   [/^reviewers$/, () => viewReviewers('')], [/^reviewers\/(.+)$/, (m) => viewReviewers(decodeURIComponent(m[1]))],
-  [/^policy$/, () => viewPolicy()], [/^measurement$/, () => viewMeasurement()], [/^business$/, () => viewBusiness()],
+  [/^policy$/, () => viewPolicy()], [/^business$/, () => viewBusiness()],
 ];
 let lastRoute = '';
 function route() {

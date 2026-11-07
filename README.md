@@ -43,8 +43,7 @@ Open http://localhost:8000. The first start loads the supplied development and p
 | Claim page | The claimant sees status and answers a missing-information request. |
 | Reviewers | Queue, facts, rule trace, history. Correct a fact, override or confirm, with reason, reviewer and policy version recorded. Record a late final outcome. |
 | Policy changes | Edit rules, preview which open claims move (closed ones are shown as untouched), publish with an approver. |
-| Measurement | Quality by policy version, changed cases on their own, failures, blank-input handling, monitoring plan. |
-| Business case | Full claim history, policy impact, the measured error rates for the business model, activity log. |
+| Business case | Full claim history, policy impact, the measured error rates for the business model (and label import), activity log. |
 
 Demo sign-in has no passwords. The name you enter is stored with every override, edit and publish.
 
@@ -53,7 +52,7 @@ Demo sign-in has no passwords. The name you enter is stored with every override,
 1. Open **Policy changes**. Edit the rules (or use *Edit as JSON*). Click **Preview impact**: it lists every open claim that would move and confirms closed claims stay put.
 2. Click **Publish v2** with an author and an approver. This writes `policies/v2.json`, re-decides all **open** claims, flags the changed ones for recheck, and leaves **closed** claims exactly as they were.
 3. **Commit `policies/v2.json` to the repository.** The judges' batch run reads it from there. On a free host the file system is wiped on restart, so the committed file is the source of truth.
-4. For the quality report, add an `expected_v2` column to a labelled CSV and import it on the **Measurement** page. Changed cases are reported separately and show what the change fixed or made worse.
+4. For the quality report, add an `expected_v2` column to a labelled CSV and import it on the **Business case** page, **Error rates** tab. The full quality report (changed cases reported separately, failures, blank-input handling) is available from `GET /api/quality`.
 
 You can also skip the website: copy `policies/v1.json` to `policies/v2.json`, edit it, and run the batch script.
 
