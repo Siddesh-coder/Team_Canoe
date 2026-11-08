@@ -1,0 +1,45 @@
+.landing-hold > span { color: var(--ink); transition: color 600ms ease-out; }
+.landing-hold svg { opacity: 0; }
+.landing-hold path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.landing-hold[data-entered="true"] > span { color: var(--cedar); }
+.landing-hold[data-entered="true"] svg { opacity: 1; }
+.landing-hold[data-entered="true"] path { animation: landing-draw 650ms ease-out both; }
+.landing-role-card { transform-origin: center; transition: transform 250ms ease-out; }
+@media (hover: hover) {
+  .landing-role-card:hover { transform: scale(1.04); }
+}
+/* Principle rows lift like the TODAY rows: statement text scales in place, no layout shift. */
+.landing-principle-text { transform-origin: left center; transition: transform 250ms ease-out; }
+@media (hover: hover) {
+  .landing-principle:hover .landing-principle-text { transform: scale(1.06); }
+}
+.landing-steps { position: relative; }
+.landing-step { position: relative; }
+.landing-step-copy { opacity: 1; }
+.landing-step-line { position: absolute; left: 0; right: 0; top: 7px; height: 1px; background: color-mix(in oklab, var(--ink) 30%, transparent); transform-origin: left center; }
+.landing-steps[data-ready="true"]:not([data-visible="true"]) .landing-step-copy { opacity: 0; }
+.landing-steps[data-ready="true"]:not([data-visible="true"]) .landing-step-line { transform: scaleX(0); }
+.landing-steps[data-visible="true"] .landing-step-line { animation: landing-line 1800ms linear both; }
+.landing-steps[data-visible="true"] .landing-step-copy { animation: landing-copy 400ms ease-out both; }
+.landing-steps[data-visible="true"] .landing-step-1 .landing-step-copy { animation-delay: 600ms; }
+.landing-steps[data-visible="true"] .landing-step-2 .landing-step-copy { animation-delay: 1200ms; }
+@keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes landing-line { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes landing-copy { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 767px) {
+  .landing-step-line { display: none; }
+  .landing-step::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 1px; background: color-mix(in oklab, var(--ink) 30%, transparent); transform-origin: left center; }
+  .landing-steps[data-ready="true"]:not([data-visible="true"]) .landing-step::before { transform: scaleX(0); }
+  .landing-steps[data-visible="true"] .landing-step::before { animation: landing-line 600ms linear both; }
+  .landing-steps[data-visible="true"] .landing-step-1::before { animation-delay: 600ms; }
+  .landing-steps[data-visible="true"] .landing-step-2::before { animation-delay: 1200ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-role-card { transform: none !important; transition: none; }
+  .landing-principle-text { transform: none !important; transition: none; }
+  .landing-hold > span { color: var(--cedar); transition: none; }
+  .landing-hold svg { opacity: 1; }
+  .landing-hold path { stroke-dashoffset: 0; animation: none !important; }
+  .landing-steps .landing-step-copy { opacity: 1 !important; animation: none !important; }
+  .landing-steps :is(.landing-step-line, .landing-step::before) { transform: none !important; animation: none !important; }
+}

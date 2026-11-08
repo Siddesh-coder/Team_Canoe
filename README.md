@@ -1,102 +1,160 @@
-# Canoe: trustworthy claims triage
+# Canoe Claim River
 
-Thinc! Munich hackathon, Taktile case. Canoe reads a fictional motor claim, recommends **routine_processing**, **request_information** or **human_review**, and shows the facts, the rule and the policy version behind the answer. It never approves or pays a claim.
+A React + TypeScript claims intake app built with TanStack Start, Vite, Tailwind CSS and Lovable. This handoff includes a small floating canoe help chat, English/German intake copy, and a light/dark theme switch.
 
-**Python standard library only.** Nothing to install. Python 3.10 or newer.
+- [Lovable editor](https://lovable.dev/projects/71f89c40-da44-4aa1-9a95-c46f980fe60f)
+- [Live app](https://canoe-claim-river.lovable.app) (publishing is separate from this branch)
+- [Feature branch](https://github.com/Maxi-2505/canoe-claim-river/tree/feat/floating-canoe-lovable-handoff): `feat/floating-canoe-lovable-handoff`
 
-## Live backend
+## Open these changes in Lovable
 
-The backend is deployed on Render (free tier):
+In the existing project, open **Project settings → Git → GitHub**, then select `feat/floating-canoe-lovable-handoff` in the branch picker. Lovable edits and syncs the selected branch. Alternatively, review and merge this branch into the connected branch. Use a normal merge and preserve published history. [Lovable GitHub documentation](https://docs.lovable.dev/integrations/github)
 
-**https://canoe-rc49.onrender.com**
+For a separate project, select this branch on GitHub, choose **Code → Download ZIP**, and use Lovable's **Upload code** import. This creates a separate copy; connecting Git sync afterwards is a separate step. [Import guidance](https://docs.lovable.dev/integrations/github#can-i-import-an-existing-github-repo-into-lovable)
 
-* This is the **API base URL**. All endpoints start with `/api`, for example `https://canoe-rc49.onrender.com/api/claims`. Use it without a trailing slash.
-* Health check: `https://canoe-rc49.onrender.com/api/health` should return `{"status": "ok", ...}`.
-* The same address also serves the built-in Canoe test website at `/`.
-* No access token is set, so no authentication header is needed.
-* The free tier falls asleep when idle. The first request can take 30 to 60 seconds, so open `/api/health` a few minutes before a demo.
-* Data saved on the live server (claims, overrides, policies published through the site) is lost when it restarts. Policy files in `policies/` are safe because they are in this repo.
-* Building the website elsewhere (for example Lovable)? Read `docs/FRONTEND_BRIEF.md` and `docs/API.md`.
+The project owner must give the recipient editing access through **Share**. This README and the source code do not grant account permissions. Editors can customize features; ownership, transfer and some administration actions require other roles. GitHub access is separate. [Collaboration roles](https://docs.lovable.dev/features/collaboration)
 
-## The one design decision that matters
+## Paste this into Lovable to start the handoff
 
-The written policy decides, in code, with no language model in the decision path. The policy is a versioned JSON file (`policies/v1.json`) that the engine executes in order. Reasons:
+```text
+Read README.md and AGENTS.md. Work on the
+feat/floating-canoe-lovable-handoff branch.
 
-* The policy has exact boundaries (a quote of exactly 1,500 is still routine; 1,501 is not). A model can drift on those. A rule engine cannot.
-* The judges score the batch output with a script. A deterministic engine gives the same answer every run.
-* A blank field is an absent fact. The engine uses three-valued logic (true, false, unknown), so an unknown never turns into a routine approval.
+Keep the small transparent 3D-style canoe chatbot at middle-right,
+with the "Sail with us" label, gentle motion, reduced-motion support,
+English/German selector, and light/dark toggle.
 
-A language model may later extract facts from free text, draft explanations or turn a policy owner's plain-language change into a rule for review. It would only ever propose; the engine decides.
+The implementation is in src/components/site-tools/SiteTools.tsx,
+src/components/site-tools/ChatBoatMark.tsx, src/assets/chat-canoe-3d.png,
+and the floating site tools section of src/styles.css.
+The provider and widget are mounted in src/routes/__root.tsx.
 
-## Run the batch path (what the judges run)
-
-```
-python batch.py claims.csv results.csv
-```
-
-Output columns, exactly: `case_id, recommendation_v1, recommendation_v2, needs_recheck, rule_v1, rule_v2, explanation`.
-
-* `recommendation_v1` always comes from v1.
-* `recommendation_v2` comes from the newest file in `policies/`. With only v1 present it repeats v1.
-* Closed claims: `recommendation_v2` repeats the retained v1 decision, `rule_v2` repeats `rule_v1`, `needs_recheck` is `False`.
-* Open claims: `needs_recheck` is `True` when the newest version changes the recommendation.
-* Rule ids carry their version, for example `v2:R1.ev_battery`, so you can see which policy produced an answer.
-* A row that cannot be processed becomes `human_review`, never routine.
-
-## Run the app (website and API)
-
-```
-python -m canoe.api
+Let me customize the position, size, label, artwork, colours, messages,
+and which pages show the widget. Preserve the existing claims workflow
+and current background scene. Keep decisions in the external rules
+engine, and follow AGENTS.md for server writes, schema and secrets.
+Run the existing tests and production build after changes.
 ```
 
-Open http://localhost:8000. The first start loads the supplied development and practice claims. Pages:
+## Feature controls and file locations
 
-| Page | What it does |
-|---|---|
-| Triage | One claim through a form, or a CSV through the **Batch version** tab. Three example buttons. |
-| Claim page | The claimant sees status and answers a missing-information request. |
-| Reviewers | Queue, facts, rule trace, history. Correct a fact, override or confirm, with reason, reviewer and policy version recorded. Record a late final outcome. |
-| Policy changes | Edit rules, preview which open claims move (closed ones are shown as untouched), publish with an approver. |
-| Business case | Full claim history, policy impact, the measured error rates for the business model (and label import), activity log. |
+| Feature | Where to edit | What to change |
+| --- | --- | --- |
+| Canoe artwork | `src/assets/chat-canoe-3d.png` | Replace the transparent PNG or change its import in `ChatBoatMark.tsx`. |
+| Shared boat component | `src/components/site-tools/ChatBoatMark.tsx` | Used by the launcher and chat header. |
+| Position and size | `src/styles.css` | `.canoe-chat-launcher`, `.canoe-chat-logo`, `.canoe-chat-panel`, and mobile media queries. |
+| Invitation | `src/components/site-tools/SiteTools.tsx` | Find `Sail with us` / `Komm an Bord`; update visible and accessible labels together. |
+| Greeting, topics, replies | `SiteTools.tsx`, `copy.en` / `copy.de` | Edit both languages. Topic and answer arrays use matching indexes. |
+| Reply matching | `SiteTools.tsx`, `answer()` | Update keyword matching when changing topics. |
+| Translations | `SiteTools.tsx`, `translations` / `t()` | Add dictionary entries; wrap additional page strings with `t()`. |
+| Theme colours | `src/styles.css`, `:root` / `.dark` | Edit colour variables. The provider controls the document theme class. |
+| Mounting and visibility | `src/routes/__root.tsx` | Mount `SiteTools` once; keep its provider above all `useSiteTools()` consumers. |
+| Translated intake | `src/components/canoe/IntakeFlow.tsx`, `QuestionCard.tsx` | These consume the shared translation helper. |
+| Image generation notes | `src/assets/chat-canoe-3d.prompt.md` | Original prompt for creating replacement artwork. |
 
-Demo sign-in has no passwords. The name you enter is stored with every override, edit and publish.
+The help chat provides **local canned FAQ replies**. It does not call an AI service, retrieve a customer's claim, or make claim decisions. Messages are held in component state and reset on reload. Language and theme are stored in localStorage under `canoe-locale` and `canoe-theme`. Defaults are English and light mode; saved preferences take effect after mounting. Translation coverage is partial: unmapped strings remain in English.
 
-## Writing a policy as a document
+The canoe is a transparent illustration with 3D-style shading and CSS motion, not a rotatable 3D model. The widget needs no API key; claim submission still needs the project's existing backend configuration.
 
-The policy owner can upload a `.txt`, `.md` or `.docx` on the **Policy changes** page instead of using the rule editor. One rule per sentence, for example `Send to human_review if quote_eur is greater than 1200`. The template is `docs/policy_template.txt` (it is policy v2 written out). No AI is involved: the same text always gives the same rules, and any line that cannot be read stops the upload and is named, so a rule is never silently dropped. The result is a draft; it is previewed and published with an approver like any other change, and saved as `policies/vN.json`.
+## Move, resize, or remove features
 
-## Policy v2 (official change notice)
+Current artwork: **72 × 48 px**. Clickable area including the label: **90 × 66 px**. Position: `right: 20px; top: 50%; transform: translateY(-50%)`; phones use `right: 12px`.
 
-`policies/v2.json` applies the notice: the quote limit falls to EUR 1,200 (exactly 1,200 stays routine) and `repair_type = ev_high_voltage_battery` always goes to human review, ahead of the missing-document rules. `data/labelled_development_cases_v2.csv` holds the dev cases with hand-derived `expected_v2` labels.
+Edit the existing rules in `src/styles.css` rather than accumulating contradictory overrides. Move the panel with the launcher and check the mobile media queries at the end of the floating-tools section.
 
-## Saturday runbook: the policy change (v2) (already applied; kept as the general procedure)
+Example: bottom-right launcher, panel above it (change these properties on the existing selectors):
 
-1. Open **Policy changes**. Edit the rules (or use *Edit as JSON*). Click **Preview impact**: it lists every open claim that would move and confirms closed claims stay put.
-2. Click **Publish v2** with an author and an approver. This writes `policies/v2.json`, re-decides all **open** claims, flags the changed ones for recheck, and leaves **closed** claims exactly as they were.
-3. **Commit `policies/v2.json` to the repository.** The judges' batch run reads it from there. On a free host the file system is wiped on restart, so the committed file is the source of truth.
-4. For the quality report, add an `expected_v2` column to a labelled CSV and import it on the **Business case** page, **Error rates** tab. The full quality report (changed cases reported separately, failures, blank-input handling) is available from `GET /api/quality`.
-
-You can also skip the website: copy `policies/v1.json` to `policies/v2.json`, edit it, and run the batch script.
-
-## Tests
-
+```css
+.canoe-chat-launcher {
+  left: auto;
+  right: 20px;
+  top: auto;
+  bottom: 20px;
+  transform: none;
+}
+.canoe-chat-panel {
+  left: auto;
+  right: 20px;
+  top: auto;
+  bottom: 102px;
+  transform: none;
+  max-height: min(520px, calc(100dvh - 126px));
+}
 ```
-python -m unittest discover -s tests -v
+
+For another floating location, change the anchors and clear opposing ones with `auto`. For a header or content container, use `position: static; transform: none` on the launcher and move `<SiteTools />` to that container inside the provider. Its chat panel and theme/language controls remain separately positioned until their CSS is changed too. Do not mount multiple widget copies.
+
+Change `.canoe-chat-logo` for artwork size and `.canoe-chat-launcher` for its hit area. Keep room for the label and a usable touch target. To disable movement, set `.canoe-chat-logo { animation: none; }`. Reduced-motion users already receive a static boat.
+
+To hide the widget, remove `<SiteTools />` but keep `<SiteToolsProvider>` for translated intake components. To keep chat only, remove the `canoe-site-controls` JSX from `SiteTools`; retain its provider. To use just the artwork, copy the PNG and render it as a normal `<img>` wherever needed.
+
+### Paste-ready customization prompts
+
+```text
+Move the existing canoe chat launcher to right: 24px and top: 30%.
+Keep its small image and "Sail with us" label. Position the panel inside
+the viewport and check phone layouts, form controls and navigation.
 ```
 
-32 tests cover the 14 labelled cases, the 1,500 boundary, every blank field, unreadable values, closed-claim protection, override recording, policy publishing and the batch columns.
+```text
+Change the invitation to "Need a hand?" in English and
+"Brauchst du Hilfe?" in German, including the accessible label.
+Keep the current small size and transparent background.
+```
 
-## Measured results on the supplied labelled cases (policy v1)
+```text
+Replace the FAQ topics and replies with the text below.
+Update copy.en, copy.de and answer() keyword matching together.
+Keep claim decision logic out of this chat.
+[Paste the new topics and replies here.]
+```
 
-14 of 14 correct. Wrong routine recommendations: 0. Unnecessary escalations: 0. That says the rules match the written policy on these examples. It does not prove coverage of real claims, and 14 cases is too few to quote a risk rate.
+## Copy into another React project
 
-## Deploying so a Lovable site can call it
+These are editable React components, not a universal HTML embed. For a compatible React/TypeScript app:
 
-See `docs/API.md`. The server needs no build step. Start command: `python -m canoe.api`. Set `CANOE_API_TOKEN` to require a token. `render.yaml` is included.
+1. Copy `SiteTools.tsx`, `ChatBoatMark.tsx`, and `src/assets/chat-canoe-3d.png`, retaining their relative locations.
+2. Install `lucide-react` if missing. Adjust the `@/assets/...` import if the destination uses another alias.
+3. Copy the CSS starting at `/* Floating site tools. All styling is scoped to these additions. */`. Supply these variables from the target theme or this project's `:root` / `.dark` definitions: `--paper`, `--ink`, `--stone`, `--cedar`, `--border`, `--muted`, `--card`, `--background`, `--foreground`, `--font-display`, `--font-mono`. Provide a standard `sr-only` class if Tailwind is absent.
+4. Mount the provider and widget once around the existing app:
 
-## Limits to be honest about
+```tsx
+import { SiteTools, SiteToolsProvider } from "./components/site-tools/SiteTools";
 
-* SQLite on a free host is wiped on restart. Fine for a demo; use a hosted database for real use. Policy files should live in the repository.
-* Sign-in is a demo. There is no real authentication or role enforcement beyond the optional API token.
-* Evidence documents are not uploaded; a claimant states a document is attached, and the record marks it as stated, not verified.
-* Emails are drafted and logged to an outbox, not sent.
+export function App() {
+  return (
+    <SiteToolsProvider>
+      <YourExistingApp />
+      <SiteTools />
+    </SiteToolsProvider>
+  );
+}
+```
+
+5. To translate destination pages, use `useSiteTools().t(...)` inside the provider and add dictionary entries. Copying the widget alone does not translate the destination app.
+6. Adapt document language/theme handling and localStorage keys if the destination already manages them.
+
+## Local development
+
+```sh
+git clone --branch feat/floating-canoe-lovable-handoff https://github.com/Maxi-2505/canoe-claim-river.git
+cd canoe-claim-river
+npm install
+npm run dev
+```
+
+Use a Node.js version compatible with the project's Vite 8 dependencies. The repository also has `bun.lock` for its Bun workflow. On Windows PowerShell, use `npm.cmd` if script policy blocks `npm.ps1`.
+
+```sh
+npm test
+npm run build
+npm run preview
+```
+
+Use Lovable-managed secrets and the existing backend setup for database operations. Never put credentials in this README, prompts or browser code. `VITE_` variables are browser-visible. Reviewer and policy APIs use `VITE_API_URL` when set, otherwise in-memory mocks; those mocks do not replace claim-submission storage.
+
+Check chat open/close, label readability, narrow/wide layouts, saved theme/language preferences and reduced-motion behavior. Verify that the launcher stays clear of the main form and decorative boat.
+
+## Project boundaries
+
+Follow [AGENTS.md](AGENTS.md). Questions belong in `src/config`; intake rules stay in `src/lib/intake/logic.ts`; claim writes go through server functions; external rules engines own decisions. Reviewer and policy data use their API modules. Lovable manages schema changes, generated files, connectors and secrets. Preserve the current decorative background and published Git history when integrating this feature branch.

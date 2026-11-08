@@ -1,0 +1,229 @@
+{
+  "vertical": "motor",
+  "form_version": "motor-2026.11-seed",
+  "sections": [
+    "story",
+    "people",
+    "damage",
+    "documents"
+  ],
+  "questions": [
+    {
+      "id": "what_happened",
+      "vertical": "motor",
+      "section": "story",
+      "label": "What happened to your car?",
+      "help": "We ask so the right person looks at your claim.",
+      "type": "choice",
+      "options": [
+        {
+          "value": "motor_own_damage",
+          "label": "Damage to my car",
+          "hint": "Collision, scrape, hail, vandalism…"
+        },
+        {
+          "value": "theft",
+          "label": "My car was stolen"
+        },
+        {
+          "value": "other",
+          "label": "Something else"
+        }
+      ],
+      "field": "claim_type",
+      "mapping": "identity",
+      "source": "customer",
+      "short": "What happened"
+    },
+    {
+      "id": "description",
+      "vertical": "motor",
+      "section": "story",
+      "label": "Tell us in a few sentences what happened.",
+      "help": "Your own words help us understand it quickly.",
+      "type": "text",
+      "field": "claim_summary",
+      "mapping": "identity",
+      "source": "customer",
+      "short": "Your story"
+    },
+    {
+      "id": "incident_date",
+      "vertical": "motor",
+      "section": "story",
+      "label": "When did it happen?",
+      "help": "We use the date to check your cover on that day.",
+      "type": "date",
+      "source": "customer",
+      "short": "Date"
+    },
+    {
+      "id": "policy_number",
+      "vertical": "motor",
+      "section": "story",
+      "label": "What is your policy number?",
+      "help": "You'll find it on your insurance card - we need it to check your cover.",
+      "type": "text",
+      "source": "customer",
+      "short": "Policy number"
+    },
+    {
+      "id": "other_party",
+      "vertical": "motor",
+      "section": "people",
+      "label": "Was another vehicle or person involved?",
+      "help": "This tells us whether anyone else needs to be contacted.",
+      "type": "tri_state",
+      "source": "customer",
+      "short": "Someone else involved",
+      "also_for": [
+        "liability_disputed"
+      ]
+    },
+    {
+      "id": "other_party_agrees",
+      "vertical": "motor",
+      "section": "people",
+      "label": "Does the other side agree on who caused it?",
+      "help": "It's fine if you don't know yet.",
+      "type": "tri_state",
+      "field": "liability_disputed",
+      "mapping": {
+        "yes": "False",
+        "no": "True"
+      },
+      "source": "customer",
+      "show_if": {
+        "q": "other_party",
+        "eq": "yes"
+      },
+      "short": "Other side agrees"
+    },
+    {
+      "id": "injury",
+      "vertical": "motor",
+      "section": "people",
+      "label": "Was anyone hurt?",
+      "help": "If so, a person - not a form - will be in touch.",
+      "type": "tri_state",
+      "field": "injury_reported",
+      "mapping": {
+        "yes": "True",
+        "no": "False"
+      },
+      "source": "customer",
+      "short": "Anyone hurt"
+    },
+    {
+      "id": "is_electric",
+      "vertical": "motor",
+      "section": "damage",
+      "label": "Is your car electric or a plug-in hybrid?",
+      "help": "Electric cars sometimes need a specialist garage.",
+      "type": "tri_state",
+      "field": "repair_type",
+      "mapping": "repair_type",
+      "source": "customer",
+      "show_if": {
+        "q": "what_happened",
+        "eq": "motor_own_damage"
+      },
+      "short": "Electric car"
+    },
+    {
+      "id": "battery_affected",
+      "vertical": "motor",
+      "section": "damage",
+      "label": "Could the high-voltage battery be affected?",
+      "help": "A best guess is fine - say so if you're not sure.",
+      "type": "tri_state",
+      "field": "repair_type",
+      "mapping": "repair_type",
+      "source": "customer",
+      "show_if": {
+        "q": "is_electric",
+        "eq": "yes"
+      },
+      "short": "Battery affected"
+    },
+    {
+      "id": "quote_amount",
+      "vertical": "motor",
+      "section": "damage",
+      "label": "How much is the repair quote?",
+      "help": "An estimate from the garage is enough. In euros.",
+      "type": "number",
+      "field": "quote_eur",
+      "mapping": "round",
+      "source": "customer",
+      "show_if": {
+        "q": "what_happened",
+        "eq": "motor_own_damage"
+      },
+      "extractable_from": "quote",
+      "short": "Repair quote"
+    },
+    {
+      "id": "has_quote",
+      "vertical": "motor",
+      "section": "documents",
+      "label": "Do you have an itemized repair quote from a garage?",
+      "help": "A quote that lists the parts and labour helps us move faster.",
+      "type": "tri_state",
+      "options": [
+        {
+          "value": "yes",
+          "label": "Yes"
+        },
+        {
+          "value": "no",
+          "label": "Not yet"
+        },
+        {
+          "value": "not_sure",
+          "label": "I'm not sure"
+        }
+      ],
+      "field": "itemized_quote_present",
+      "mapping": {
+        "yes": "True",
+        "no": "False"
+      },
+      "source": "customer",
+      "extractable_from": "quote",
+      "upload_on_yes": "quote",
+      "short": "Itemized quote"
+    },
+    {
+      "id": "has_report",
+      "vertical": "motor",
+      "section": "documents",
+      "label": "Do you have a police or incident report?",
+      "help": "We need an incident report to process your claim - add it now if you have it.",
+      "type": "tri_state",
+      "options": [
+        {
+          "value": "yes",
+          "label": "Yes"
+        },
+        {
+          "value": "no",
+          "label": "Not yet"
+        },
+        {
+          "value": "not_sure",
+          "label": "I'm not sure"
+        }
+      ],
+      "field": "incident_report_present",
+      "mapping": {
+        "yes": "True",
+        "no": "False"
+      },
+      "source": "customer",
+      "extractable_from": "police_report",
+      "upload_on_yes": "police_report",
+      "short": "Police report"
+    }
+  ]
+}

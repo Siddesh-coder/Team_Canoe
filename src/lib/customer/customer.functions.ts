@@ -1,0 +1,46 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { buildApiPayload, patchMissingColumns } from "@/lib/intake/logic";
+import { motorConfig } from "@/lib/intake/config";
+import { isPublicDemoId } from "@/lib/chat/logic";
+import type { CustomerClaim } from "./status";
+import type { IntakeState } from "@/lib/intake/types";
+const input = z.object({ caseId: z.string().regex(/^(CLM-\d{4,8}|FORM-\d{4,8}|DEV-\d{3}|PRA-\d{3})$/) });
+const stateSchema = z.object({ facts: z.record(z.string().max(60), z.object({ value: z.union([z.string().max(4000), z.number().finite(), z.null()]), status: z.enum(["unknown", "known", "dont_know", "pending_confirm", "system"]), source: z.enum(["customer", "upload", "system"]), timestamp: z.string().max(40) })), uploads: z.object({ quote: z.object({ amount: z.number().finite().nonnegative().optional(), itemized: z.boolean().optional(), sampleId: z.string().max(40).optional() }).optional(), police_report: z.object({ sampleId: z.string().max(40).optional() }).optional() }) });
+export const createCustomerClaim = createServerFn({ method: "POST" }).inputValidator((d: unknown) => z.object({ state: stateSchema }).parse(d)).handler(async ({ data }) => {
+  const base = process.env['CANOE_API_URL'] || import.meta.env['VITE_API_URL'];
+  const secret = process.env['CUSTOMER_TRACKING_SECRET'];
+  if (!base || !secret) throw new Error("Claim service unavailable. Please try again.");
+  const token = process.env['CANOE_API_TOKEN'];
+  const response = await fetch(`${base.replace(/\/$/, "")}/api/claims`, { method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(buildApiPayload(data.state as IntakeState, motorConfig)), signal: AbortSignal.timeout(20000) });
+  if (!response.ok) throw new Error("We couldn't send your claim. Please try again.");
+  const claim = await response.json() as CustomerClaim;
+  if (!/^CLM-\d{4,8}$/.test(claim.case_id)) throw new Error("The claim confirmation is unavailable.");
+  const { grantClaim } = await import("./access.server");
+  await grantClaim(claim.case_id, secret);
+  return { caseId: claim.case_id };
+});
+export const getCustomerClaim = createServerFn({ method: "GET" }).inputValidator((d: unknown) => input.parse(d)).handler(async ({ data }): Promise<CustomerClaim> => {
+  const secret = process.env['CUSTOMER_TRACKING_SECRET'];
+  const { readCustomerClaim } = await import("./read.server");
+  return readCustomerClaim(data.caseId, secret, process.env['CANOE_API_URL'] || import.meta.env['VITE_API_URL'], process.env['CANOE_API_TOKEN']);
+});
+export const answerCustomerRequest = createServerFn({ method: "POST" }).inputValidator((d: unknown) => input.extend({ state: stateSchema }).parse(d)).handler(async ({ data }) => {
+  const secret = process.env['CUSTOMER_TRACKING_SECRET'];
+  const { hasClaimAccess } = await import("./access.server");
+  if (!isPublicDemoId(data.caseId) && (!secret || !await hasClaimAccess(data.caseId, secret))) throw new Error("Please verify this claim through support.");
+  const base = process.env['CANOE_API_URL'] || import.meta.env['VITE_API_URL'];
+  if (!base) throw new Error("Claim service unavailable.");
+  const token = process.env['CANOE_API_TOKEN'];
+  const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const url = `${base.replace(/\/$/, "")}/api/claims/${encodeURIComponent(data.caseId)}`;
+  const read = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+  if (!read.ok) throw new Error("Claim service unavailable.");
+  const c = await read.json();
+  if (c.case_status === "closed") throw new Error("This claim is closed.");
+  const fields: string[] = (c.info_requests ?? []).filter((r: { status: string }) => r.status === "open").flatMap((r: { ask_fields: string[] }) => r.ask_fields);
+  if (!fields.length) throw new Error("No information is requested right now.");
+  const response = await fetch(`${url}/info-response`, { method: "POST", headers, body: JSON.stringify({ values: patchMissingColumns(data.state as IntakeState, motorConfig, fields), name: "" }), signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error("We couldn't send the update. Please try again.");
+  return { caseId: data.caseId };
+});

@@ -1,0 +1,297 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Canoe - "Steady through changing water". Six colours only: paper, ink, cedar, reed, stone, mist. */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 6px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --font-display: "Bricolage Grotesque", "Inter", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-cedar: var(--cedar);
+  --color-reed: var(--reed);
+  --color-stone: var(--stone);
+  --color-mist: var(--mist);
+  --color-ochre: var(--ochre);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+}
+
+:root {
+  --radius: 16px;
+  --paper: oklch(0.954 0.013 84);
+  --ink: oklch(0.205 0.012 50);
+  --cedar: oklch(0.455 0.145 32);
+  --reed: oklch(0.52 0.05 120);
+  --stone: oklch(0.52 0.015 60);
+  --mist: oklch(0.982 0.007 84);
+  --today-paper: #F3EFE8;
+  --today-hand-ink: #3A3630;
+  --today-hand-red: #A3261A;
+  --business-grid: color-mix(in oklab, var(--stone) 6%, transparent);
+  /* Internal review pages only: request-information text. */
+  --ochre: oklch(0.7 0.12 75);
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--mist);
+  --card-foreground: var(--ink);
+  --popover: var(--paper);
+  --popover-foreground: var(--ink);
+  --primary: var(--cedar);
+  --primary-foreground: var(--paper);
+  --secondary: var(--mist);
+  --secondary-foreground: var(--ink);
+  --muted: var(--mist);
+  --muted-foreground: var(--stone);
+  --accent: var(--mist);
+  --accent-foreground: var(--ink);
+  --destructive: var(--cedar);
+  --destructive-foreground: var(--paper);
+  --border: color-mix(in oklab, var(--stone) 28%, transparent);
+  --input: color-mix(in oklab, var(--stone) 30%, transparent);
+  --ring: var(--cedar);
+}
+
+.dark {
+  --today-paper: var(--paper);
+  --today-hand-ink: var(--ink);
+  --today-hand-red: var(--cedar);
+  --paper: oklch(0.2 0.01 50);
+  --ink: oklch(0.94 0.013 84);
+  --cedar: oklch(0.62 0.14 32);
+  --mist: oklch(0.25 0.012 50);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-size: 15.5px;
+  }
+  :focus-visible { outline: 2px solid var(--cedar); outline-offset: 2px; }
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+
+@utility recommendation-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@utility canoe-backdrop {
+  position: fixed;
+  inset: auto 0 0 auto;
+  width: min(1100px, 95vw);
+  aspect-ratio: 1775 / 1130;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+  background-size: cover;
+  -webkit-mask-image: radial-gradient(ellipse at 70% 60%, #000 35%, transparent 75%);
+  mask-image: radial-gradient(ellipse at 70% 60%, #000 35%, transparent 75%);
+  .dark & { mix-blend-mode: screen; filter: invert(1); opacity: 0.12; }
+}
+
+@utility question-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  font-size: 32px;
+  line-height: 1.05;
+  font-weight: 600;
+  @media (min-width: 768px) { font-size: 44px; }
+}
+
+@utility card-calm {
+  background: var(--mist);
+  border: 1px solid color-mix(in oklab, var(--stone) 25%, transparent);
+  border-radius: 16px;
+}
+
+@utility answer-btn {
+  background: var(--paper);
+  border: 1px solid color-mix(in oklab, var(--stone) 30%, transparent);
+  border-radius: 12px;
+  transition: border-color 200ms cubic-bezier(0.22, 1, 0.36, 1), background 200ms;
+  &:hover { border-color: color-mix(in oklab, var(--ink) 40%, transparent); }
+  &[data-selected="true"] {
+    border-color: var(--cedar);
+    background: color-mix(in oklab, var(--cedar) 8%, var(--paper));
+  }
+}
+
+@utility btn-cedar {
+  background: var(--cedar);
+  color: var(--paper);
+  border-radius: 999px;
+  font-weight: 500;
+  transition: filter 200ms, opacity 200ms;
+  &:hover { filter: brightness(1.06); }
+  &:disabled { opacity: 0.4; }
+}
+
+@utility btn-quiet {
+  color: var(--ink);
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--stone) 35%, transparent);
+  &:hover { border-color: color-mix(in oklab, var(--ink) 40%, transparent); }
+}
+
+@utility field-input {
+  background: var(--paper);
+  border: 1px solid color-mix(in oklab, var(--stone) 30%, transparent);
+  border-radius: 12px;
+  &:focus { outline: none; border-color: var(--cedar); }
+}
+
+@keyframes scan-sweep {
+  from { transform: translateY(0); }
+  to { transform: translateY(var(--scan-distance, 260px)); }
+}
+
+/* Papercut sea: decorative, behind content, transforms only. */
+.papercut-sea {
+  position: fixed; left: 0; right: 0; bottom: 0; height: min(64vh, 640px);
+  pointer-events: none; z-index: -1; overflow: hidden; opacity: 0; transition: opacity 400ms;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%);
+  mask-image: linear-gradient(to bottom, transparent, #000 12%);
+}
+.papercut-sea[data-ready="true"] { opacity: 1; }
+.papercut-layer { position: absolute; left: -40px; right: -40px; bottom: -40px; will-change: transform; }
+.papercut-layer canvas { width: 100%; height: 100%; }
+.papercut-sea:not([data-active="true"]) .papercut-ripple { animation-play-state: paused; }
+.papercut-layer svg { width: 100%; height: 100%; display: block; }
+.papercut-canoe { position: absolute; left: 0; top: 0; transform-origin: 50% 78%; will-change: transform;
+  filter: drop-shadow(0 0 1px var(--mist)) drop-shadow(0 0 1px var(--mist)) drop-shadow(0 -2px 6px rgba(30,25,20,0.2)); }
+.papercut-canoe > img { transform: rotate(-3.5deg); transform-origin: 50% 50%; position: absolute; inset: 0; width: 100%; height: 100%; }
+.papercut-snip { position: absolute; left: 0; top: 0; width: 5px; height: 4px; opacity: 0;
+  background: var(--mist); clip-path: polygon(0 20%, 80% 0, 100% 70%, 30% 100%);
+  filter: drop-shadow(0 1px 1px rgba(30,25,20,0.25)); }
+.papercut-drop { border-radius: 50%; clip-path: none; width: 3px; height: 3px; background: color-mix(in oklab, var(--mist) 70%, var(--stone)); }
+.papercut-fog { position: absolute; left: 0; right: 0; top: 0; height: 42%; pointer-events: none;
+  background: linear-gradient(to bottom,
+    color-mix(in oklab, var(--paper) 100%, transparent) 0%,
+    color-mix(in oklab, var(--paper) 96%, transparent) 30%,
+    color-mix(in oklab, var(--paper) 85%, transparent) 50%,
+    color-mix(in oklab, var(--paper) 64%, transparent) 65%,
+    color-mix(in oklab, var(--paper) 38%, transparent) 78%,
+    color-mix(in oklab, var(--paper) 16%, transparent) 89%,
+    color-mix(in oklab, var(--paper) 0%, transparent) 100%); }
+.papercut-contact { position: absolute; left: 0; top: 0; height: 28px; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(30,25,20,0.28), rgba(30,25,20,0.1) 55%, transparent 75%); }
+.papercut-ripple { position: absolute; left: 50%; top: 50%; width: 60%; height: 40%; border-radius: 50%;
+  border: 1px solid rgba(30,25,20,0.35); box-shadow: 0 -1px 0 color-mix(in oklab, var(--paper) 70%, transparent);
+  transform: translate(-50%, -50%) scale(0.9); animation: papercut-ripple 4.2s ease-out infinite; }
+.papercut-ripple--2 { animation-delay: 1.4s; } .papercut-ripple--3 { animation-delay: 2.8s; }
+@keyframes papercut-ripple { 0% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.7; } 100% { transform: translate(-50%,-50%) scale(1.9, 1.5); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .papercut-ripple { animation: none; opacity: 0.4; } }
+.papercut-grain { position: absolute; inset: 0; z-index: 40; opacity: 0.12;
+  background-image: url("./assets/sea-grain.png"); }
+.dark .papercut-sea { filter: grayscale(1) invert(1); opacity: 0; }
+.dark .papercut-sea[data-ready="true"] { opacity: 0.25; }
+
+/* Floating site tools. All styling is scoped to these additions. */
+.canoe-site-controls { position: fixed; z-index: 40; left: 20px; bottom: 20px; display: flex; gap: 7px; }
+.canoe-tool-button, .canoe-locale-select { display: grid; place-items: center; height: 42px; min-width: 42px; border: 1px solid color-mix(in oklab, var(--stone) 35%, transparent); border-radius: 999px; background: var(--paper); color: var(--ink); box-shadow: 0 4px 16px color-mix(in oklab, var(--ink) 12%, transparent); }
+.canoe-tool-button { cursor: pointer; }
+.canoe-locale-select select { appearance: none; height: 100%; width: 100%; padding: 0 10px; border: 0; background: transparent; color: inherit; font: 500 12px var(--font-mono); cursor: pointer; }
+.canoe-chat-launcher { position: fixed; z-index: 41; right: 20px; bottom: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; width: 90px; height: 66px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); box-shadow: none; cursor: pointer; }
+.canoe-chat-launcher:focus-visible { outline: 2px solid var(--cedar); outline-offset: 4px; }
+.canoe-chat-logo { position: relative; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid color-mix(in oklab, var(--stone) 35%, transparent); border-radius: 999px; background: var(--paper); color: var(--ink); box-shadow: 0 4px 16px color-mix(in oklab, var(--ink) 12%, transparent); transform-origin: center; animation: canoe-chat-float 5.5s ease-in-out infinite; user-select: none; }
+.canoe-chat-logo > svg:not(.canoe-chat-wave) { width: 26px; height: 26px; }
+.canoe-chat-wave { position: absolute; left: 9px; right: 9px; bottom: 7px; width: calc(100% - 18px); height: 5px; color: color-mix(in oklab, var(--cedar) 60%, transparent); }
+.canoe-chat-wave path { stroke-dasharray: 60; stroke-dashoffset: 60; transition: stroke-dashoffset 200ms ease; }
+.canoe-chat-launcher:hover .canoe-chat-wave path, .canoe-chat-launcher:focus-visible .canoe-chat-wave path { stroke-dashoffset: 0; }
+.canoe-chat-invite { font: 400 12px/1.2 var(--font-sans); white-space: nowrap; color: var(--ink); text-shadow: 0 1px 3px var(--paper); }
+.canoe-chat-launcher:hover .canoe-chat-invite { text-decoration: underline; text-underline-offset: 3px; }
+.canoe-chat-launcher:hover .canoe-chat-logo, .canoe-chat-launcher:focus-visible .canoe-chat-logo { animation-play-state: paused; }
+@keyframes canoe-chat-float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-2px) rotate(1deg); }
+}
+.papercut-sea--contained { position: absolute; z-index: 0; height: min(36vh, 480px); }
+@media (min-width: 768px) { .papercut-sea--contained { height: min(52vh, 480px); } }
+@media (prefers-reduced-motion: reduce) { .canoe-chat-logo { animation: none; } .canoe-chat-wave path { transition: none; } }
+.canoe-chat-panel { position: fixed; z-index: 42; right: 20px; bottom: 96px; display: flex; flex-direction: column; width: min(360px, calc(100vw - 32px)); max-height: min(520px, calc(100dvh - 128px)); overflow: hidden; border: 1px solid color-mix(in oklab, var(--stone) 30%, transparent); border-radius: 18px; background: var(--paper); color: var(--ink); box-shadow: 0 14px 50px color-mix(in oklab, var(--ink) 18%, transparent); }
+.canoe-chat-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 17px; border-bottom: 1px solid var(--border); }
+.canoe-chat-brand { display: flex; align-items: center; gap: 10px; }
+.canoe-chat-brand > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.canoe-chat-brand strong { font-family: var(--font-display); font-size: 17px; }
+.canoe-chat-brand small { color: var(--stone); font-size: 11px; }
+.canoe-chat-mark { display: grid; place-items: center; width: 44px; height: 34px; color: var(--ink); }
+.canoe-chat-mark > svg { display: block; width: 30px; height: 30px; }
+.canoe-chat-close { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--stone); cursor: pointer; }
+.canoe-chat-close:hover { background: var(--muted); color: var(--ink); }
+.canoe-chat-body { display: flex; flex: 1; flex-direction: column; gap: 10px; overflow-y: auto; padding: 16px; }
+.canoe-chat-bubble { max-width: 88%; margin: 0; padding: 10px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+.canoe-chat-reply { align-self: flex-start; border: 1px solid var(--border); background: var(--card); }
+.canoe-chat-user { align-self: flex-end; background: var(--cedar); color: var(--paper); }
+.canoe-chat-topics { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
+.canoe-chat-topics button { padding: 7px 10px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--ink); font-size: 11px; cursor: pointer; }
+.canoe-chat-topics button:hover { border-color: var(--cedar); }
+.canoe-chat-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); }
+.canoe-chat-form input { min-width: 0; flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--background); color: var(--foreground); font: inherit; font-size: 13px; }
+.canoe-chat-form button { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; background: var(--cedar); color: var(--paper); cursor: pointer; }
+.canoe-chat-form button:disabled { opacity: .45; cursor: default; }
+.canoe-chat-role { max-width: 180px; border: 0; padding: 0; background: transparent; color: var(--stone); font: 400 11px var(--font-sans); cursor: pointer; }
+.canoe-chat-bubble { overflow-wrap: anywhere; flex-shrink: 0; }
+.canoe-chat-bubble p { margin: 0; }
+.canoe-chat-bubble p + p { margin-top: 8px; }
+.canoe-chat-bubble ul, .canoe-chat-bubble ol { padding-left: 16px; margin: 6px 0; }
+.canoe-chat-bubble a { color: var(--cedar); text-decoration: underline; }
+.canoe-chat-retry { padding: 4px 0 0; height: auto; font-size: 12px; }
+.canoe-chat-status { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.canoe-chat-status header { display: flex; justify-content: space-between; align-items: center; gap: 10px; font: 500 11px var(--font-mono); }
+.canoe-chat-status dl { margin: 10px 0 6px; display: grid; gap: 5px; }
+.canoe-chat-status dl > div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; font-size: 11px; }
+.canoe-chat-status dt, .canoe-chat-status small { color: var(--stone); }
+.canoe-chat-status dd { margin: 0; overflow-wrap: anywhere; }
+.canoe-chat-status small { font-size: 10px; }
+@media (max-width: 600px) { .canoe-chat-panel { right: 12px; } }
+@media (max-width: 480px) { .canoe-site-controls { left: 12px; bottom: 12px; } .canoe-chat-launcher { right: 12px; bottom: 12px; } }

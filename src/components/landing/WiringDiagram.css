@@ -1,0 +1,21 @@
+.landing-wiring .wiring-flow {
+  stroke-dasharray: 10 7;
+  animation: wiring-dash 1.7s linear infinite;
+}
+.landing-wiring .wiring-ghost { stroke-dasharray: 9 8; }
+.landing-wiring .wiring-gate {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 250ms ease-out;
+}
+@keyframes wiring-dash { to { stroke-dashoffset: -34; } }
+@media (hover: hover) {
+  .landing-wiring .wiring-gate:hover { transform: scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-wiring .wiring-flow, .landing-wiring .wiring-gate {
+    animation: none;
+    transform: none;
+    transition: none;
+  }
+}

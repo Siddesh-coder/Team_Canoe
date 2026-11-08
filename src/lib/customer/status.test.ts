@@ -1,0 +1,14 @@
+import { describe, expect, it } from "vitest";
+import { getCustomerStatus, type CustomerClaim } from "./status";
+const c: CustomerClaim = { case_id: "CLM-0012", case_status: "open", created_at: "2026-11-08T00:00:00Z", info_requests: [] };
+describe("customer status", () => {
+ it("always reaches received", () => expect(getCustomerStatus(c, 0).station).toBe(1));
+ it("routine is checking, not payment approval", () => {const s=getCustomerStatus({...c,effective_recommendation:"routine_processing"},0);expect(s.station).toBe(2);expect(s.kind).toBe("checking");expect(s.next).toBe("No payment is approved yet - your insurer will be in touch.");});
+ it("information requests use friendly labels and reminders", () => { const s=getCustomerStatus({...c,effective_recommendation:"request_information",info_requests:[{status:"open",created_at:c.created_at,ask_fields:["incident_report_present"]}]},Date.parse("2026-11-11T00:00:00Z"));expect(s.station).toBe(2);expect(s.kind).toBe("need_info");expect(s.needInfo?.labels).toEqual(["incident report"]);expect(s.needInfo?.reminder.stage).toBe(2);});
+ it("human review is specialist",()=>{const s=getCustomerStatus({...c,effective_recommendation:"human_review"},0);expect(s.station).toBe(3);expect(s.kind).toBe("specialist");});
+ it.each([["approve","Approved for normal processing."],["decline","Closed - we've written to you."]])("closed %s protects settlement",(decision,headline)=>{const s=getCustomerStatus({...c,case_status:"closed",effective_recommendation:"request_information",settlement:{decision,created_at:c.created_at}},0);expect(s.station).toBe(4);expect(s.headline).toBe(headline);expect(s.needInfo).toBeUndefined();});
+ it("closed without settlement stays closed",()=>expect(getCustomerStatus({...c,case_status:"closed"},0).headline).toBe("Closed."));
+ it("awaiting recheck does not ask twice",()=>{const s=getCustomerStatus({...c,effective_recommendation:"request_information",request_status:"answered_awaiting_recheck"},0);expect(s.kind).toBe("checking");expect(s.needInfo).toBeUndefined();});
+ it("day seven records the final reminder with SMS",()=>{const s=getCustomerStatus({...c,effective_recommendation:"request_information",info_requests:[{status:"open",created_at:c.created_at,ask_fields:["incident_report_present"]}]},Date.parse("2026-11-15T00:00:00Z"));expect(s.needInfo?.reminder.stage).toBe(3);expect(s.events.at(-1)?.text).toBe("Reminder 3 sent (simulated) · SMS");});
+ it("day ten schedules reviewer handover without changing the engine recommendation",()=>{const s=getCustomerStatus({...c,effective_recommendation:"request_information",info_requests:[{status:"open",created_at:c.created_at,ask_fields:["incident_report_present"]}]},Date.parse("2026-11-18T00:00:00Z"));expect(s.needInfo?.reminder.overdue).toBe(true);expect(s.kind).toBe("need_info");expect(s.events.at(-1)?.text).toBe("Reviewer call handover due (simulated)");});
+});

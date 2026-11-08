@@ -1,0 +1,10 @@
+import { describe, expect, it } from "vitest";
+import { answer, applyDocument, buildApiPayload, emptyState } from "./logic";
+import { motorConfig } from "./config";
+describe("live claim payload",()=>{
+ it("sends exactly the ten string facts and five submission fields",()=>{const p=buildApiPayload(emptyState(),motorConfig);expect(Object.keys(p).sort()).toEqual(["policy_active_on_incident","claim_type","repair_type","quote_eur","incident_report_present","itemized_quote_present","injury_reported","liability_disputed","duplicate_flag","evidence_conflict","claim_summary","policy_number","incident_date","stated_quote_eur","document_quote_eur"].sort());expect(Object.values(p).every(v=>typeof v==="string")).toBe(true);});
+ it("leaves insurer-owned facts blank",()=>{const p=buildApiPayload(answer(emptyState(),"policy_number","POL-1001"),motorConfig);expect(p.policy_active_on_incident).toBe("");expect(p.duplicate_flag).toBe("");expect(p.evidence_conflict).toBe("");});
+ it("keeps boolean strings and not sure blanks",()=>{let s=answer(emptyState(),"what_happened","motor_own_damage");s=answer(s,"other_party","no");s=answer(s,"injury","no");s=answer(s,"has_report","not_sure");const p=buildApiPayload(s,motorConfig);expect(p.liability_disputed).toBe("False");expect(p.injury_reported).toBe("False");expect(p.incident_report_present).toBe("");});
+ it("preserves typed and confirmed amounts separately",()=>{let s=answer(emptyState(),"what_happened","motor_own_damage");s=applyDocument(s,"quote",{amount:750,itemized:true});s=answer(s,"quote_amount",800);s=answer(s,"incident_date","2026-11-02");s=answer(s,"policy_number","POL-1001");const p=buildApiPayload(s,motorConfig);expect(p.stated_quote_eur).toBe("800");expect(p.document_quote_eur).toBe("750");expect(p.quote_eur).toBe("800");expect(p.itemized_quote_present).toBe("True");expect(p.incident_date).toBe("2026-11-02");expect(p.policy_number).toBe("POL-1001");expect(p).not.toHaveProperty("case_id");});
+ it("does not invent amounts",()=>{const p=buildApiPayload(emptyState(),motorConfig);expect(p.stated_quote_eur).toBe("");expect(p.document_quote_eur).toBe("");expect(p.quote_eur).toBe("");});
+});

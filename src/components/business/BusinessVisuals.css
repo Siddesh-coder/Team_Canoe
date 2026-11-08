@@ -1,0 +1,18 @@
+.business-visuals .business-chart { background-image: linear-gradient(var(--business-grid) 1px, transparent 1px), linear-gradient(90deg, var(--business-grid) 1px, transparent 1px); background-size: 24px 24px; }
+.business-visuals .business-grow { transform-origin: left center; animation: business-grow 850ms ease-out both; }
+.business-visuals .business-wave { animation: business-water 5s ease-in-out infinite alternate; }
+.business-visuals .business-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: business-draw 1200ms ease-out forwards; }
+.business-visuals .business-donut { animation: business-ring 1s ease-out both; }
+.business-visuals .business-kpi { position: relative; overflow: hidden; }
+.business-visuals .business-kpi::after { content: ''; position: absolute; width: 120px; height: 120px; bottom: -100px; right: -50px; border: 1px solid var(--border); border-radius: 50%; opacity: 0; pointer-events: none; }
+.business-visuals .business-kpi:hover::after { animation: business-ripple 1.1s ease-out; }
+.business-visuals .business-segment { transition: width 600ms ease-out; }
+@keyframes business-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes business-water { from { transform: translateX(-16px); } to { transform: translateX(16px); } }
+@keyframes business-draw { to { stroke-dashoffset: 0; } }
+@keyframes business-ring { from { stroke-dasharray: 0 100; } }
+@keyframes business-ripple { from { opacity: 0.8; transform: scale(0.2); } to { opacity: 0; transform: scale(4); } }
+@media (prefers-reduced-motion: reduce) {
+  .business-visuals *, .business-visuals *::after { animation: none !important; transition: none !important; }
+  .business-visuals .business-line { stroke-dashoffset: 0; }
+}

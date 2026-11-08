@@ -1,0 +1,2 @@
+export function recentClaims(): string[] { try { const ids = JSON.parse(localStorage.getItem("canoe-recent-claims") ?? "[]"); return Array.isArray(ids) ? ids.filter((id) => typeof id === "string" && /^(CLM|FORM|DEV|PRA)-\d+$/.test(id)).slice(0, 10) : []; } catch { return []; } }
+export function rememberClaim(id: string) { try { localStorage.setItem("canoe-recent-claims", JSON.stringify([id, ...recentClaims().filter((x) => x !== id)].slice(0, 10))); } catch { /* optional storage */ } }
