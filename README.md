@@ -4,11 +4,12 @@ Thinc! Munich hackathon, Taktile case. Canoe reads a fictional motor claim, reco
 
 **Python standard library only.** Nothing to install. Python 3.10 or newer.
 
-## Live backend
+The webapp is under: https://canoe-claim-river.lovable.app !!!!!
 
-The backend is deployed on Render (free tier):
+https://canoe-claim-river.lovable.app
 
-**https://canoe-rc49.onrender.com**
+
+
 
 * This is the **API base URL**. All endpoints start with `/api`, for example `https://canoe-rc49.onrender.com/api/claims`. Use it without a trailing slash.
 * Health check: `https://canoe-rc49.onrender.com/api/health` should return `{"status": "ok", ...}`.
